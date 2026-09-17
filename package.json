@@ -1,6 +1,6 @@
 {
   "name": "iskra-desktop",
-  "version": "1.0.0",
+  "version": "0.7.1",
   "description": "Iskra Official & Community Desktop Client Starter Kit (Electron, Windows EXE, Linux DEB)",
   "author": "Kirieshka14 <riz.riz1941@gmail.com>",
   "main": "electron-main.cjs",

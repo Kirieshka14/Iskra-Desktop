@@ -1,6 +1,6 @@
 {
   "clientName": "Iskra Desktop Client",
-  "clientVersion": "1.0.0",
+  "clientVersion": "0.7.1",
   "targetPlatform": "desktop",
   "webUrl": "https://iskraai.pages.dev",
   "apiUrl": "https://bacand-iskra.onrender.com",
