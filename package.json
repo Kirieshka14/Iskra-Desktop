@@ -1,0 +1,18 @@
+{
+  "name": "iskra-desktop",
+  "version": "1.0.0",
+  "description": "Iskra Official & Community Desktop Client Starter Kit (Electron, Windows EXE, Linux DEB)",
+  "main": "electron-main.cjs",
+  "license": "AGPL-3.0-or-later",
+  "private": false,
+  "scripts": {
+    "start": "electron .",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux deb AppImage",
+    "dist": "electron-builder -mwl"
+  },
+  "devDependencies": {
+    "electron": "^31.3.1",
+    "electron-builder": "^24.13.3"
+  }
+}
