@@ -249,6 +249,38 @@ function createWindow() {
     }
   });
 
+  // Open external links in user's default system browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    const isInternal = url.startsWith(DEFAULT_WEB_URL) || (clientConfig.webUrl && url.startsWith(clientConfig.webUrl));
+    if (!isInternal && (url.startsWith("http:") || url.startsWith("https:") || url.startsWith("mailto:"))) {
+      shell.openExternal(url);
+      return { action: "deny" };
+    }
+    return { action: "allow" };
+  });
+
+  // Handle history keyboard shortcuts (Alt+Left, Alt+Right)
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    if (input.type === "keyDown") {
+      if (input.alt && input.key === "ArrowLeft" && mainWindow.webContents.canGoBack()) {
+        mainWindow.webContents.goBack();
+        event.preventDefault();
+      } else if (input.alt && input.key === "ArrowRight" && mainWindow.webContents.canGoForward()) {
+        mainWindow.webContents.goForward();
+        event.preventDefault();
+      }
+    }
+  });
+
+  // Mouse navigation buttons (back/forward)
+  mainWindow.on("app-command", (e, cmd) => {
+    if (cmd === "browser-backward" && mainWindow.webContents.canGoBack()) {
+      mainWindow.webContents.goBack();
+    } else if (cmd === "browser-forward" && mainWindow.webContents.canGoForward()) {
+      mainWindow.webContents.goForward();
+    }
+  });
+
   mainWindow.loadURL(targetUrl);
 
   mainWindow.on("closed", () => {
