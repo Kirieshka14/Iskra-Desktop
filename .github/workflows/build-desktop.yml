@@ -1,0 +1,59 @@
+name: Build Desktop Clients (macOS DMG, Windows EXE, Linux DEB)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-desktop:
+    name: 💻 Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            platform: mac
+            artifact_name: Iskra-Desktop-macOS
+            artifact_path: dist/*.dmg
+          - os: windows-latest
+            platform: win
+            artifact_name: Iskra-Desktop-Windows
+            artifact_path: dist/*.exe
+          - os: ubuntu-latest
+            platform: linux
+            artifact_name: Iskra-Desktop-Linux
+            artifact_path: dist/*.deb
+
+    steps:
+      - name: Checkout Iskra-Desktop
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Dependencies
+        run: npm ci || npm install
+
+      - name: Build macOS (DMG & ZIP)
+        if: matrix.platform == 'mac'
+        run: npx electron-builder --mac dmg zip --publish never
+
+      - name: Build Windows (EXE Installer)
+        if: matrix.platform == 'win'
+        run: npx electron-builder --win nsis --publish never
+
+      - name: Build Linux (DEB & AppImage)
+        if: matrix.platform == 'linux'
+        run: npx electron-builder --linux deb AppImage --publish never
+
+      - name: Upload Desktop Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: dist/*.*
+          if-no-files-found: warn

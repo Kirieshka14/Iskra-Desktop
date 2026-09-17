@@ -7,6 +7,7 @@
   "private": false,
   "scripts": {
     "start": "electron .",
+    "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux deb AppImage",
     "dist": "electron-builder -mwl"

@@ -1,8 +1,8 @@
-# Iskra Desktop (Windows EXE & Linux DEB)
+# Iskra Desktop (macOS DMG, Windows EXE & Linux DEB)
 
 Официальный открытый десктопный клиент платформы интерактивного сторителлинга **Iskra**, созданный на базе **Electron** под свободной лицензией **GNU AGPLv3**.
 
-Этот репозиторий предназначен для сборки официального приложения Iskra под Windows и Linux, а также для создания пользовательских модов сообщества.
+Этот репозиторий предназначен для сборки официального приложения Iskra под macOS, Windows и Linux, а также для создания пользовательских модов сообщества.
 
 ---
 
@@ -41,6 +41,9 @@ npm start
 
 ### 4. Сборка установщиков
 ```bash
+# Сборка macOS DMG & ZIP (Apple Silicon arm64 + Intel x64):
+npm run build:mac
+
 # Сборка Windows EXE:
 npm run build:win
 
