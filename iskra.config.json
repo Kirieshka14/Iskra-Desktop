@@ -2,7 +2,7 @@
   "clientName": "Iskra Desktop Client",
   "clientVersion": "1.0.0",
   "targetPlatform": "desktop",
-  "webUrl": "https://iskraai.run.place",
+  "webUrl": "https://iskraai.pages.dev",
   "apiUrl": "https://bacand-iskra.onrender.com",
-  "clientKey": "iskra_app_live_YOUR_KEY_HERE"
+  "clientKey": ""
 }

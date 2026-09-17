@@ -1,13 +1,15 @@
-const { app, BrowserWindow, session, Menu } = require("electron");
+const { app, BrowserWindow, session, Menu, globalShortcut } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 
 let mainWindow = null;
 
+const DEFAULT_WEB_URL = "https://iskraai.pages.dev";
+
 // Read optional mod configuration
 let clientConfig = {
   apiUrl: "https://bacand-iskra.onrender.com",
-  webUrl: "https://iskraai.run.place",
+  webUrl: DEFAULT_WEB_URL,
   clientKey: "",
 };
 
@@ -20,24 +22,144 @@ try {
   console.warn("Could not load iskra.config.json, using defaults", err);
 }
 
+// Ensure webUrl is valid or fallback to production
+if (!clientConfig.webUrl || clientConfig.webUrl.includes("run.place")) {
+  clientConfig.webUrl = DEFAULT_WEB_URL;
+}
+
+function buildErrorHtml(errDesc, targetUrl) {
+  return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Iskra Desktop — Ошибка подключения</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #0d0f12;
+      color: #f4f4f5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+      box-sizing: border-box;
+    }
+    .card {
+      max-width: 480px;
+      padding: 40px 32px;
+      background: #14171d;
+      border: 1px solid #27272a;
+      border-radius: 20px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 8px;
+      background: rgba(244, 63, 94, 0.15);
+      color: #fb7185;
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 10px 0;
+      color: #fff;
+    }
+    p {
+      font-size: 13px;
+      color: #a1a1aa;
+      line-height: 1.6;
+      margin: 0 0 24px 0;
+    }
+    .url {
+      display: block;
+      font-family: monospace;
+      font-size: 11px;
+      color: #71717a;
+      word-break: break-all;
+      margin-top: 6px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 24px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #fff;
+      background: linear-gradient(135deg, #f43f5e, #f59e0b);
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(244, 63, 94, 0.3);
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .btn:hover {
+      filter: brightness(1.1);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: #27272a;
+      color: #d4d4d8;
+      box-shadow: none;
+      margin-left: 8px;
+    }
+    .btn-secondary:hover {
+      background: #3f3f46;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">Ошибка сети</div>
+    <h1>Не удалось загрузить Iskra</h1>
+    <p>
+      Проверьте интернет-соединение или доступность сервера платформы.
+      <span class="url">Адрес: ${targetUrl}<br>Код: ${errDesc || "UNKNOWN_ERROR"}</span>
+    </p>
+    <div>
+      <button class="btn" onclick="location.href='${targetUrl}'">Повторить попытку</button>
+      <button class="btn btn-secondary" onclick="location.href='${DEFAULT_WEB_URL}'">Основное зеркало</button>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 function createMacMenu() {
-  if (process.platform !== "darwin") return;
+  const isMac = process.platform === "darwin";
 
   const template = [
-    {
-      label: app.name,
-      submenu: [
-        { role: "about", label: "О программе Iskra" },
-        { type: "separator" },
-        { role: "services" },
-        { type: "separator" },
-        { role: "hide", label: "Скрыть Iskra" },
-        { role: "hideOthers", label: "Скрыть остальные" },
-        { role: "unhide", label: "Показать все" },
-        { type: "separator" },
-        { role: "quit", label: "Завершить Iskra" },
-      ],
-    },
+    ...(isMac
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about", label: "О программе Iskra" },
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide", label: "Скрыть Iskra" },
+              { role: "hideOthers", label: "Скрыть остальные" },
+              { role: "unhide", label: "Показать все" },
+              { type: "separator" },
+              { role: "quit", label: "Завершить Iskra" },
+            ],
+          },
+        ]
+      : [
+          {
+            label: "Файл",
+            submenu: [{ role: "quit", label: "Выход" }],
+          },
+        ]),
     {
       label: "Правка",
       submenu: [
@@ -53,11 +175,18 @@ function createMacMenu() {
     {
       label: "Вид",
       submenu: [
-        { role: "reload", label: "Перезагрузить" },
-        { role: "forceReload", label: "Принудительно перезагрузить" },
-        { role: "toggleDevTools", label: "Инструменты разработчика" },
+        {
+          label: "Перезагрузить",
+          accelerator: "CmdOrCtrl+R",
+          click: () => mainWindow && mainWindow.reload(),
+        },
+        {
+          label: "Инструменты разработчика",
+          accelerator: "F12",
+          click: () => mainWindow && mainWindow.webContents.toggleDevTools(),
+        },
         { type: "separator" },
-        { role: "resetZoom", label: "Масштаб по умолчанию" },
+        { role: "resetZoom", label: "Масштаб 100%" },
         { role: "zoomIn", label: "Увеличить" },
         { role: "zoomOut", label: "Уменьшить" },
         { type: "separator" },
@@ -104,8 +233,21 @@ function createWindow() {
     });
   }
 
-  // Load production web frontend or local build
-  const targetUrl = clientConfig.webUrl || "https://iskraai.run.place";
+  // Fallback and error handling
+  let triedFallback = false;
+  const targetUrl = clientConfig.webUrl || DEFAULT_WEB_URL;
+
+  mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
+    console.error("Failed to load URL:", validatedURL, errorCode, errorDescription);
+    if (!triedFallback && validatedURL !== DEFAULT_WEB_URL) {
+      triedFallback = true;
+      console.log("Retrying with fallback mirror:", DEFAULT_WEB_URL);
+      mainWindow.loadURL(DEFAULT_WEB_URL);
+    } else {
+      mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildErrorHtml(errorDescription, targetUrl))}`);
+    }
+  });
+
   mainWindow.loadURL(targetUrl);
 
   mainWindow.on("closed", () => {
