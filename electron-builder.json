@@ -7,7 +7,8 @@
   "files": [
     "electron-main.cjs",
     "iskra.config.json",
-    "package.json"
+    "package.json",
+    "build/**/*"
   ],
   "mac": {
     "target": [

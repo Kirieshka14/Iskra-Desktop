@@ -210,12 +210,14 @@ function createMacMenu() {
 }
 
 function createWindow() {
+  const iconPath = path.join(__dirname, "build", "icon.png");
   mainWindow = new BrowserWindow({
     width: 1240,
     height: 840,
     minWidth: 900,
     minHeight: 640,
     backgroundColor: "#0d0f12",
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     title: clientConfig.clientName || "Iskra Desktop",
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
     trafficLightPosition: { x: 16, y: 16 },
