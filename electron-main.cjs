@@ -1,8 +1,9 @@
-const { app, BrowserWindow, session, Menu, globalShortcut } = require("electron");
+const { app, BrowserWindow, session, Menu, Tray, shell, nativeImage } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 
 let mainWindow = null;
+let appTray = null;
 
 const DEFAULT_WEB_URL = "https://iskraai.pages.dev";
 
@@ -255,9 +256,66 @@ function createWindow() {
   });
 }
 
+function createTray() {
+  try {
+    // Generate a simple 16x16 monochrome icon for system tray if icon file isn't present
+    const iconPath = path.join(__dirname, "build", "icon.png");
+    let icon;
+    if (fs.existsSync(iconPath)) {
+      icon = nativeImage.createFromPath(iconPath);
+    } else {
+      // 16x16 transparent image with dot
+      icon = nativeImage.createEmpty();
+    }
+
+    appTray = new Tray(icon);
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: "Показать Iskra",
+        click: () => {
+          if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.show();
+            mainWindow.focus();
+          } else {
+            createWindow();
+          }
+        },
+      },
+      {
+        label: "Перезагрузить",
+        click: () => mainWindow && mainWindow.reload(),
+      },
+      { type: "separator" },
+      {
+        label: "Выход",
+        click: () => {
+          app.isQuitting = true;
+          app.quit();
+        },
+      },
+    ]);
+
+    appTray.setToolTip("Iskra Desktop");
+    appTray.setContextMenu(contextMenu);
+    appTray.on("click", () => {
+      if (mainWindow) {
+        if (mainWindow.isVisible()) {
+          mainWindow.focus();
+        } else {
+          mainWindow.show();
+        }
+      }
+    });
+  } catch (err) {
+    console.warn("Tray creation skipped:", err.message);
+  }
+}
+
 app.whenReady().then(() => {
   createMacMenu();
   createWindow();
+  createTray();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
