@@ -281,6 +281,18 @@ function createWindow() {
     }
   });
 
+  // Custom sleek scrollbars for desktop client
+  mainWindow.webContents.on("did-finish-load", () => {
+    mainWindow.webContents
+      .insertCSS(`
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0d0f12; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+      `)
+      .catch(() => {});
+  });
+
   mainWindow.loadURL(targetUrl);
 
   mainWindow.on("closed", () => {
