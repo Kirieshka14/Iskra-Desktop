@@ -28,11 +28,57 @@ if (!clientConfig.webUrl || clientConfig.webUrl.includes("run.place")) {
   clientConfig.webUrl = DEFAULT_WEB_URL;
 }
 
+function escapeHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function isBackendUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    const backendUrl = new URL(clientConfig.apiUrl || "https://bacand-iskra.onrender.com");
+    if (parsed.origin === backendUrl.origin) return true;
+    if (parsed.hostname === "bacand-iskra.onrender.com") return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function isInternalAppUrl(urlStr) {
+  try {
+    const parsed = new URL(urlStr);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    const defaultHostname = new URL(DEFAULT_WEB_URL).hostname;
+    if (parsed.hostname === defaultHostname || parsed.hostname.endsWith("." + defaultHostname)) {
+      return true;
+    }
+    if (clientConfig.webUrl) {
+      const configHostname = new URL(clientConfig.webUrl).hostname;
+      if (parsed.hostname === configHostname || parsed.hostname.endsWith("." + configHostname)) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 function buildErrorHtml(errDesc, targetUrl) {
+  const safeErr = escapeHtml(errDesc || "UNKNOWN_ERROR");
+  const safeUrl = escapeHtml(targetUrl || DEFAULT_WEB_URL);
+
   return `<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline';">
   <title>Iskra Desktop — Ошибка подключения</title>
   <style>
     body {
@@ -123,13 +169,21 @@ function buildErrorHtml(errDesc, targetUrl) {
     <h1>Не удалось загрузить Iskra</h1>
     <p>
       Проверьте интернет-соединение или доступность сервера платформы.
-      <span class="url">Адрес: ${targetUrl}<br>Код: ${errDesc || "UNKNOWN_ERROR"}</span>
+      <span class="url">Адрес: ${safeUrl}<br>Код: ${safeErr}</span>
     </p>
     <div>
-      <button class="btn" onclick="location.href='${targetUrl}'">Повторить попытку</button>
-      <button class="btn btn-secondary" onclick="location.href='${DEFAULT_WEB_URL}'">Основное зеркало</button>
+      <button class="btn" id="retryBtn">Повторить попытку</button>
+      <button class="btn btn-secondary" id="fallbackBtn">Основное зеркало</button>
     </div>
   </div>
+  <script>
+    document.getElementById('retryBtn').addEventListener('click', function() {
+      window.location.href = ${JSON.stringify(targetUrl)};
+    });
+    document.getElementById('fallbackBtn').addEventListener('click', function() {
+      window.location.href = ${JSON.stringify(DEFAULT_WEB_URL)};
+    });
+  </script>
 </body>
 </html>`;
 }
@@ -228,10 +282,12 @@ function createWindow() {
     },
   });
 
-  // Inject Client Key into all outgoing network requests to Iskra backend
+  // Inject Client Key ONLY into outgoing network requests to Iskra backend
   if (clientConfig.clientKey) {
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-      details.requestHeaders["X-Iskra-Client-Key"] = clientConfig.clientKey;
+      if (isBackendUrl(details.url)) {
+        details.requestHeaders["X-Iskra-Client-Key"] = clientConfig.clientKey;
+      }
       callback({ requestHeaders: details.requestHeaders });
     });
   }
@@ -253,12 +309,28 @@ function createWindow() {
 
   // Open external links in user's default system browser
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    const isInternal = url.startsWith(DEFAULT_WEB_URL) || (clientConfig.webUrl && url.startsWith(clientConfig.webUrl));
-    if (!isInternal && (url.startsWith("http:") || url.startsWith("https:") || url.startsWith("mailto:"))) {
-      shell.openExternal(url);
+    if (!isInternalAppUrl(url)) {
+      if (url.startsWith("http:") || url.startsWith("https:") || url.startsWith("mailto:")) {
+        shell.openExternal(url);
+      }
       return { action: "deny" };
     }
     return { action: "allow" };
+  });
+
+  // Prevent navigation to malicious or external third-party sites inside the main app frame
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (!isInternalAppUrl(url) && !url.startsWith("data:")) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  mainWindow.webContents.on("will-redirect", (event, url) => {
+    if (!isInternalAppUrl(url) && !url.startsWith("data:")) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
   });
 
   // Handle history keyboard shortcuts (Alt+Left, Alt+Right)
