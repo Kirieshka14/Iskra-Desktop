@@ -70,6 +70,31 @@ function isInternalAppUrl(urlStr) {
   }
 }
 
+function buildMissingKeyHtml() {
+  return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Iskra Desktop — Требуется Client Key</title>
+  <style>
+    body { margin: 0; padding: 0; background: #0d0f12; color: #f4f4f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; text-align: center; box-sizing: border-box; }
+    .card { max-width: 480px; padding: 40px 32px; background: #14171d; border: 1px solid #27272a; border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 8px; background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 12px; font-weight: 700; margin-bottom: 16px; }
+    h1 { font-size: 20px; margin: 0 0 10px 0; color: #fff; }
+    p { font-size: 13px; color: #a1a1aa; line-height: 1.6; margin: 0 0 20px 0; }
+    code { background: #1e222b; padding: 3px 8px; border-radius: 6px; font-size: 12px; color: #f43f5e; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">🚫 Доступ заблокирован</div>
+    <h1>Клиент не активирован</h1>
+    <p>Для работы сборки требуется указать валидный <code>Client Key</code> разработчика в файле <code>iskra.config.json</code>.<br><br>Сгенерируйте ключ в веб-версии на странице <strong>API-ключи</strong> и вставьте его в конфигурацию приложения.</p>
+  </div>
+</body>
+</html>`;
+}
+
 function buildErrorHtml(errDesc, targetUrl) {
   const safeErr = escapeHtml(errDesc || "UNKNOWN_ERROR");
   const safeUrl = escapeHtml(targetUrl || DEFAULT_WEB_URL);
@@ -282,15 +307,22 @@ function createWindow() {
     },
   });
 
-  // Inject Client Key ONLY into outgoing network requests to Iskra backend
-  if (clientConfig.clientKey) {
-    session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-      if (isBackendUrl(details.url)) {
-        details.requestHeaders["X-Iskra-Client-Key"] = clientConfig.clientKey;
-      }
-      callback({ requestHeaders: details.requestHeaders });
-    });
+  const rawKey = (clientConfig.clientKey || "").trim();
+  const hasValidKey = rawKey.startsWith("iskra_app_live_") && rawKey !== "iskra_app_live_YOUR_KEY_HERE";
+
+  if (!hasValidKey) {
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(buildMissingKeyHtml())}`);
+    return;
   }
+
+  // Inject Client Key ONLY into outgoing network requests to Iskra backend
+  session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    if (isBackendUrl(details.url)) {
+      details.requestHeaders["X-Iskra-Client-Key"] = clientConfig.clientKey;
+      details.requestHeaders["X-Iskra-Client-Mod"] = "desktop";
+    }
+    callback({ requestHeaders: details.requestHeaders });
+  });
 
   // Fallback and error handling
   let triedFallback = false;
