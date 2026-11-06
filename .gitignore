@@ -1,6 +1,8 @@
-node_modules/
-dist/
+.gradle/
 build/
-.DS_Store
-*.log
 !build/icon.png
+!build/icon.ico
+out/
+.idea/
+*.iml
+.DS_Store
