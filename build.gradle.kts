@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "ai.iskra"
-version = "1.0.0"
+version = "0.8.0"
 
 kotlin {
     jvmToolchain(17)
@@ -37,19 +37,19 @@ compose.desktop {
         mainClass = "ai.iskra.desktop.MainKt"
 
         nativeDistributions {
-            targetFormats(TargetFormat.Deb, TargetFormat.AppImage, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Dmg)
+            targetFormats(TargetFormat.Deb, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Dmg)
             packageName = "iskra"
-            packageVersion = "1.0.0"
-            description = "IskraAi Native Desktop Client"
+            packageVersion = "1.8.0"
+            description = "IskraAi Desktop Client"
             vendor = "IskraAi"
 
             linux {
-                iconFile.set(project.file("build/icon.png"))
+                iconFile.set(project.file("icons/icon.png"))
                 debMaintainer = "support@iskraai.run.place"
                 menuGroup = "Network"
             }
             windows {
-                iconFile.set(project.file("build/icon.ico"))
+                iconFile.set(project.file("icons/icon.ico"))
                 menuGroup = "IskraAi"
                 shortcut = true
             }
