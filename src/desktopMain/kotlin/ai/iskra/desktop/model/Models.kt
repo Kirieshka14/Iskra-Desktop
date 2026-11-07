@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ClientConfig(
     val clientName: String = "Iskra Desktop Client",
-    val clientVersion: String = "0.8.1",
+    val clientVersion: String = "0.8.1.1",
     val targetPlatform: String = "desktop",
     val apiUrl: String = "https://bacand-iskra.onrender.com",
     val clientKey: String = ""

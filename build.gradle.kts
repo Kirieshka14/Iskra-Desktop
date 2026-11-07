@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "ai.iskra"
-version = "0.8.1"
+version = "0.8.1.1"
 
 kotlin {
     jvmToolchain(17)
@@ -40,7 +40,7 @@ compose.desktop {
             includeAllModules = true
             targetFormats(TargetFormat.Deb, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Dmg)
             packageName = "iskra"
-            packageVersion = "1.8.1"
+            packageVersion = "1.8.2"
             description = "IskraAi Desktop Client"
             vendor = "IskraAi"
 
