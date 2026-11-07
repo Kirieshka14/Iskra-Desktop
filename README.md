@@ -17,7 +17,7 @@
     ```
   - **Debian / Ubuntu / Mint (.deb)**:
     ```bash
-    sudo apt install ./iskra_1.8.0-1_amd64.deb
+    sudo apt install ./iskra_1.8.1-1_amd64.deb
     ```
   - **Портативный архив (.tar.gz)**:
     ```bash
@@ -34,7 +34,7 @@
 ```json
 {
   "clientName": "Iskra Desktop Client",
-  "clientVersion": "0.8.0",
+  "clientVersion": "0.8.1",
   "targetPlatform": "desktop",
   "webUrl": "https://iskraai.pages.dev",
   "apiUrl": "https://bacand-iskra.onrender.com",

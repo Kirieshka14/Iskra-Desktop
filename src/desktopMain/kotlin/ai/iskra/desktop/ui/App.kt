@@ -2,16 +2,10 @@ package ai.iskra.desktop.ui
 
 import ai.iskra.desktop.model.*
 import ai.iskra.desktop.network.IskraApiClient
-import ai.iskra.desktop.network.IskraApiException
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -23,644 +17,2111 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.key.*
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.skia.Image as SkiaImage
 
-enum class DesktopSection(val title: String) {
-    CATALOG("Каталог"),
-    CHAT("Диалоги"),
-    TAVERN("Таверна"),
-    STORIES("Истории"),
-    SETTINGS("Настройки")
+enum class DesktopRoute {
+    AUTH, HOME, CATALOG, COLLECTION, CREATE_BOT, PROFILE, CHAT, STORY_READER, TAVERN
 }
 
-private val AFFINITY_REGEX = Regex("<!--AFFINITY:[^>]*-->", RegexOption.IGNORE_CASE)
-private val AFFINITY_LEVEL_REGEX = Regex("<!--AFFINITY:(?:[^>]*level:)?\\s*([a-zA-Z]+)[^>]*-->", RegexOption.IGNORE_CASE)
+val GENRE_LABELS: List<Pair<String, String>> = listOf(
+    "fantasy" to "Фэнтези",
+    "horror" to "Хоррор",
+    "romance" to "Романтика",
+    "sci_fi" to "Научная фантастика",
+    "drama" to "Драма",
+    "comedy" to "Комедия",
+    "slice_of_life" to "Повседневность",
+    "historical" to "История",
+    "other" to "Другое"
+)
 
-fun extractAffinity(raw: String): Pair<String, String?> {
-    val match = AFFINITY_LEVEL_REGEX.find(raw)
-    val level = match?.groupValues?.getOrNull(1)?.lowercase()
-    val clean = raw.replace(AFFINITY_REGEX, "").trim()
-    return clean to level
-}
+fun genreLabel(key: String): String =
+    GENRE_LABELS.firstOrNull { it.first == key }?.second ?: key
 
-fun parseInitialAffinity(systemPrompt: String?): String {
-    if (systemPrompt.isNullOrBlank()) return "neutral"
-    val line = Regex("Начальный уровень отношений:\\s*([^\\n]+)").find(systemPrompt)?.groupValues?.getOrNull(1)?.lowercase() ?: return "neutral"
-    return when {
-        line.contains("ненавист") || line.contains("hatred") -> "hatred"
-        line.contains("недовер") || line.contains("distrust") -> "distrust"
-        line.contains("довери") || line.contains("trust") -> "trust"
-        line.contains("любов") || line.contains("love") -> "love"
-        else -> "neutral"
+@Composable
+fun BrandMark(
+    size: Dp = 40.dp,
+    tint: Color = IskraColors.text
+) {
+    val logoBitmap = remember {
+        runCatching {
+            val stream = Thread.currentThread().contextClassLoader.getResourceAsStream("logo-spark.png")
+                ?: Thread.currentThread().contextClassLoader.getResourceAsStream("icon.png")
+            stream?.use { bytes ->
+                SkiaImage.makeFromEncoded(bytes.readBytes()).toComposeImageBitmap()
+            }
+        }.getOrNull()
+    }
+
+    if (logoBitmap != null) {
+        Image(
+            bitmap = logoBitmap,
+            contentDescription = "IskraAi",
+            modifier = Modifier.size(size),
+            contentScale = ContentScale.Fit,
+            colorFilter = ColorFilter.tint(tint)
+        )
+    } else {
+        Canvas(modifier = Modifier.size(size)) {
+            val w = this.size.width
+            val h = this.size.height
+            val cx = w * 0.56f
+            val cy = h * 0.44f
+            val rOuter = w * 0.36f
+            val rInner = w * 0.09f
+            val starPath = Path().apply {
+                moveTo(cx, cy - rOuter)
+                quadraticTo(cx + rInner * 0.4f, cy - rInner * 0.4f, cx + rOuter, cy)
+                quadraticTo(cx + rInner * 0.4f, cy + rInner * 0.4f, cx, cy + rOuter)
+                quadraticTo(cx - rInner * 0.4f, cy + rInner * 0.4f, cx - rOuter, cy)
+                quadraticTo(cx - rInner * 0.4f, cy - rInner * 0.4f, cx, cy - rOuter)
+                close()
+            }
+            drawPath(starPath, color = tint)
+            drawArc(
+                color = tint,
+                startAngle = 35f,
+                sweepAngle = 210f,
+                useCenter = false,
+                topLeft = Offset(w * 0.14f, h * 0.18f),
+                size = androidx.compose.ui.geometry.Size(w * 0.68f, h * 0.68f),
+                style = Stroke(width = w * 0.08f, cap = StrokeCap.Round)
+            )
+        }
     }
 }
 
 @Composable
-fun FormattedMessageText(text: String, baseColor: Color) {
-    val annotated = remember(text, baseColor) {
-        buildAnnotatedString {
-            val tokenRegex = Regex("(\\*\\*[^*]+?\\*\\*|\\*[^*]+?\\*)")
-            var lastIdx = 0
-            for (match in tokenRegex.findAll(text)) {
-                if (match.range.first > lastIdx) {
-                    withStyle(SpanStyle(color = baseColor)) {
-                        append(text.substring(lastIdx, match.range.first))
-                    }
-                }
-                val token = match.value
-                if (token.startsWith("**") && token.endsWith("**") && token.length >= 4) {
-                    withStyle(SpanStyle(color = baseColor, fontWeight = FontWeight.ExtraBold)) {
-                        append(token.substring(2, token.length - 2))
-                    }
-                } else if (token.startsWith("*") && token.endsWith("*") && token.length >= 2) {
-                    withStyle(SpanStyle(color = baseColor.copy(alpha = 0.65f))) {
-                        append(token.substring(1, token.length - 1))
-                    }
-                }
-                lastIdx = match.range.last + 1
+fun RemoteImage(
+    url: String?,
+    api: IskraApiClient,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    fallbackText: String = "✦"
+) {
+    var imageBitmap by remember(url) { mutableStateOf<ImageBitmap?>(null) }
+    var failed by remember(url) { mutableStateOf(false) }
+
+    LaunchedEffect(url) {
+        if (url.isNullOrBlank()) {
+            imageBitmap = null
+            return@LaunchedEffect
+        }
+        val bytes = api.fetchImageBytes(url)
+        if (bytes != null && bytes.isNotEmpty()) {
+            val decoded = runCatching { SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap() }.getOrNull()
+            if (decoded != null) {
+                imageBitmap = decoded
+            } else {
+                failed = true
             }
-            if (lastIdx < text.length) {
-                withStyle(SpanStyle(color = baseColor)) {
-                    append(text.substring(lastIdx))
-                }
-            }
+        } else {
+            failed = true
         }
     }
-    Text(text = annotated, fontSize = 14.sp, lineHeight = 20.sp)
+
+    val bmp = imageBitmap
+    if (bmp != null && !failed) {
+        Image(
+            bitmap = bmp,
+            contentDescription = fallbackText,
+            modifier = modifier,
+            contentScale = contentScale
+        )
+    } else {
+        Box(
+            modifier = modifier.background(
+                Brush.linearGradient(
+                    colors = listOf(IskraColors.surface3, IskraColors.surface2)
+                )
+            ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = fallbackText.trim().take(2).uppercase().ifBlank { "✦" },
+                color = IskraColors.muted,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp
+            )
+        }
+    }
+}
+
+fun formatMessageRichText(raw: String, textColor: Color, mutedColor: Color): AnnotatedString {
+    return buildAnnotatedString {
+        var i = 0
+        val n = raw.length
+        while (i < n) {
+            if (raw.startsWith("**", i)) {
+                val end = raw.indexOf("**", i + 2)
+                if (end != -1) {
+                    withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = textColor)) {
+                        append(raw.substring(i + 2, end))
+                    }
+                    i = end + 2
+                    continue
+                }
+            }
+            if (raw[i] == '*') {
+                val end = raw.indexOf('*', i + 1)
+                if (end != -1) {
+                    withStyle(SpanStyle(fontStyle = FontStyle.Italic, color = mutedColor)) {
+                        append(raw.substring(i + 1, end))
+                    }
+                    i = end + 1
+                    continue
+                }
+            }
+            withStyle(SpanStyle(color = textColor)) {
+                append(raw[i])
+            }
+            i++
+        }
+    }
 }
 
 @Composable
-fun IskraDesktopApp(api: IskraApiClient = remember { IskraApiClient() }) {
-    var isAuthenticated by remember { mutableStateOf(api.session?.accessToken?.isNotBlank() == true) }
-    var themeMode by remember { mutableStateOf(api.session?.themeMode ?: "dark") }
-    var paletteId by remember { mutableStateOf(api.session?.paletteId ?: "classic") }
-    var activeSection by remember { mutableStateOf(DesktopSection.CATALOG) }
-    var selectedBot by remember { mutableStateOf<ApiBot?>(null) }
-    var bots by remember { mutableStateOf<List<ApiBot>>(emptyList()) }
-    var profile by remember { mutableStateOf<UserProfile?>(null) }
-    var points by remember { mutableStateOf<Points?>(null) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(isAuthenticated) {
-        if (isAuthenticated) {
-            try {
-                bots = api.getBots()
-                points = api.getPoints()
-                profile = api.getProfile()
-            } catch (e: IskraApiException) {
-                if (e.status == 401) isAuthenticated = false
-            } catch (_: Exception) {}
-        }
+fun UserTierBadge(tier: String) {
+    val normalized = tier.lowercase()
+    val (bg, fg, label) = when (normalized) {
+        "max", "ultra", "admin" -> Triple(Color(0x26F59E0B), Color(0xFFFBBF24), tier.uppercase())
+        "pro", "plus", "vip" -> Triple(IskraColors.accentSoft, IskraColors.text, tier.uppercase())
+        else -> Triple(IskraColors.surface3, IskraColors.muted, "FREE")
     }
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(bg)
+            .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
+            .padding(horizontal = 7.dp, vertical = 2.dp)
+    ) {
+        Text(label, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = fg)
+    }
+}
 
-    IskraTheme(themeMode = themeMode, paletteId = paletteId) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            if (!isAuthenticated) {
-                DesktopAuthScreen(
+@Composable
+fun IskraDesktopApp() {
+    val api = remember { IskraApiClient() }
+    var palette by remember { mutableStateOf(api.session?.paletteId ?: "classic") }
+    var isDark by remember { mutableStateOf((api.session?.themeMode ?: "dark") != "light") }
+    var wallpapersEnabled by remember { mutableStateOf(api.session?.wallpapersEnabled ?: false) }
+
+    IskraTheme(palette = palette, isDark = isDark) {
+        val scope = rememberCoroutineScope()
+
+        var currentRoute by remember {
+            mutableStateOf(if (api.hasValidToken()) DesktopRoute.HOME else DesktopRoute.AUTH)
+        }
+        var currentUser by remember { mutableStateOf<UserProfile?>(null) }
+        var bots by remember { mutableStateOf<List<ApiBot>>(emptyList()) }
+        var myBots by remember { mutableStateOf<List<ApiBot>>(emptyList()) }
+        var stories by remember { mutableStateOf<List<StorySummary>>(emptyList()) }
+        var myStories by remember { mutableStateOf<List<StorySummary>>(emptyList()) }
+        var recentBots by remember { mutableStateOf<List<ApiBot>>(emptyList()) }
+
+        var selectedBot by remember { mutableStateOf<ApiBot?>(null) }
+        var editingBot by remember { mutableStateOf<ApiBot?>(null) }
+        var selectedStory by remember { mutableStateOf<StorySummary?>(null) }
+        var isLoading by remember { mutableStateOf(false) }
+        var statusBanner by remember { mutableStateOf<String?>(null) }
+        var showSettingsModal by remember { mutableStateOf(false) }
+
+        fun saveAppearance(newPalette: String, newDark: Boolean, newWallpapers: Boolean = wallpapersEnabled) {
+            palette = newPalette
+            isDark = newDark
+            wallpapersEnabled = newWallpapers
+            api.updateThemePreferences(
+                themeMode = if (newDark) "dark" else "light",
+                paletteId = newPalette,
+                wallpapersEnabled = newWallpapers
+            )
+        }
+
+        fun refreshAll() {
+            scope.launch {
+                isLoading = true
+                statusBanner = null
+                runCatching {
+                    val loadedBots = api.getBots()
+                    bots = loadedBots
+                    stories = runCatching { api.getStories() }.getOrDefault(emptyList())
+                    if (api.hasValidToken()) {
+                        currentUser = runCatching { api.getProfile() }.getOrNull()
+                        myBots = runCatching { api.getMyBots() }.getOrDefault(emptyList())
+                        myStories = runCatching { api.getMyStories() }.getOrDefault(emptyList())
+                        val convs = runCatching { api.getConversations() }.getOrDefault(emptyList())
+                        if (convs.isNotEmpty()) {
+                            val botMap = loadedBots.associateBy { it.id }
+                            recentBots = convs.mapNotNull { botMap[it.botId] }.distinctBy { it.id }.take(10)
+                        }
+                    }
+                    if (recentBots.isEmpty() && loadedBots.isNotEmpty()) {
+                        recentBots = loadedBots.take(5)
+                    }
+                }.onFailure { e ->
+                    statusBanner = e.message ?: "Ошибка соединения с сервером"
+                }
+                isLoading = false
+            }
+        }
+
+        fun openChatWith(bot: ApiBot) {
+            if (!api.hasValidToken()) {
+                currentRoute = DesktopRoute.AUTH
+                return
+            }
+            selectedBot = bot
+            recentBots = (listOf(bot) + recentBots.filterNot { it.id == bot.id }).take(10)
+            currentRoute = DesktopRoute.CHAT
+        }
+
+        fun toggleBotLike(bot: ApiBot) {
+            if (!api.hasValidToken()) {
+                currentRoute = DesktopRoute.AUTH
+                return
+            }
+            scope.launch {
+                runCatching {
+                    val resp = api.toggleBotLike(bot.id)
+                    bots = bots.map {
+                        if (it.id == bot.id) it.copy(isLiked = resp.isLiked, likesCount = resp.likesCount) else it
+                    }
+                    myBots = myBots.map {
+                        if (it.id == bot.id) it.copy(isLiked = resp.isLiked, likesCount = resp.likesCount) else it
+                    }
+                    if (selectedBot?.id == bot.id) {
+                        selectedBot = selectedBot?.copy(isLiked = resp.isLiked, likesCount = resp.likesCount)
+                    }
+                }
+            }
+        }
+
+        LaunchedEffect(Unit) {
+            scope.launch { api.warmBackend() }
+            refreshAll()
+        }
+
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = IskraColors.canvas,
+            contentColor = IskraColors.text
+        ) {
+            if (currentRoute == DesktopRoute.AUTH) {
+                AuthPage(
                     api = api,
                     onAuthenticated = {
-                        isAuthenticated = true
+                        currentRoute = DesktopRoute.HOME
+                        refreshAll()
+                    },
+                    onContinueGuest = {
+                        currentRoute = DesktopRoute.HOME
+                        refreshAll()
                     }
                 )
             } else {
                 Row(modifier = Modifier.fillMaxSize()) {
-                    NavigationRail(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        modifier = Modifier.fillMaxHeight().width(96.dp)
+                    IskraSidebar(
+                        api = api,
+                        currentRoute = currentRoute,
+                        user = currentUser,
+                        isLoggedIn = api.hasValidToken(),
+                        recentBots = recentBots,
+                        selectedBotId = if (currentRoute == DesktopRoute.CHAT) selectedBot?.id else null,
+                        isDark = isDark,
+                        onNavigate = { route ->
+                            if (route == DesktopRoute.CREATE_BOT) editingBot = null
+                            if ((route == DesktopRoute.COLLECTION || route == DesktopRoute.PROFILE || route == DesktopRoute.CREATE_BOT) && !api.hasValidToken()) {
+                                currentRoute = DesktopRoute.AUTH
+                            } else {
+                                currentRoute = route
+                            }
+                        },
+                        onSelectRecentBot = { openChatWith(it) },
+                        onRemoveRecentBot = { bot -> recentBots = recentBots.filterNot { it.id == bot.id } },
+                        onOpenSettings = {
+                            if (!api.hasValidToken()) currentRoute = DesktopRoute.AUTH
+                            else showSettingsModal = true
+                        },
+                        onToggleDark = { saveAppearance(palette, !isDark) }
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(IskraColors.canvas)
                     ) {
-                        Spacer(Modifier.height(16.dp))
-                        Box(
-                            modifier = Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.primary),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("I", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Black, fontSize = 20.sp)
-                        }
-                        Spacer(Modifier.height(24.dp))
-
-                        NavigationRailItem(
-                            selected = activeSection == DesktopSection.CATALOG,
-                            onClick = { activeSection = DesktopSection.CATALOG },
-                            icon = { Icon(Icons.Default.Explore, contentDescription = null) },
-                            label = { Text("Каталог", fontSize = 11.sp) }
-                        )
-                        NavigationRailItem(
-                            selected = activeSection == DesktopSection.CHAT,
-                            onClick = { activeSection = DesktopSection.CHAT },
-                            icon = { Icon(Icons.Default.ChatBubbleOutline, contentDescription = null) },
-                            label = { Text("Диалоги", fontSize = 11.sp) }
-                        )
-                        NavigationRailItem(
-                            selected = activeSection == DesktopSection.TAVERN,
-                            onClick = { activeSection = DesktopSection.TAVERN },
-                            icon = { Icon(Icons.Default.Groups, contentDescription = null) },
-                            label = { Text("Таверна", fontSize = 11.sp) }
-                        )
-                        NavigationRailItem(
-                            selected = activeSection == DesktopSection.STORIES,
-                            onClick = { activeSection = DesktopSection.STORIES },
-                            icon = { Icon(Icons.Default.AutoStories, contentDescription = null) },
-                            label = { Text("Истории", fontSize = 11.sp) }
-                        )
-                        Spacer(Modifier.weight(1f))
-                        NavigationRailItem(
-                            selected = activeSection == DesktopSection.SETTINGS,
-                            onClick = { activeSection = DesktopSection.SETTINGS },
-                            icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                            label = { Text("Профиль", fontSize = 11.sp) }
-                        )
-                        Spacer(Modifier.height(16.dp))
-                    }
-
-                    VerticalDivider(color = MaterialTheme.colorScheme.outline, thickness = 1.dp)
-
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                        when (activeSection) {
-                            DesktopSection.CATALOG -> DesktopCatalogView(
+                        when (currentRoute) {
+                            DesktopRoute.HOME -> HomePage(
                                 api = api,
                                 bots = bots,
-                                onBotsUpdated = { bots = it },
-                                onOpenChat = { bot ->
-                                    selectedBot = bot
-                                    activeSection = DesktopSection.CHAT
-                                }
-                            )
-                            DesktopSection.CHAT -> DesktopChatView(
-                                api = api,
-                                bots = bots,
-                                initialBot = selectedBot,
-                                remainingPoints = points?.remaining,
-                                onPointsUpdated = { rem ->
-                                    points = (points ?: Points()).copy(remaining = rem)
-                                }
-                            )
-                            DesktopSection.TAVERN -> DesktopTavernView(api = api)
-                            DesktopSection.STORIES -> DesktopStoriesView(api = api)
-                            DesktopSection.SETTINGS -> DesktopSettingsView(
-                                profile = profile,
-                                points = points,
-                                themeMode = themeMode,
-                                paletteId = paletteId,
-                                onThemeModeChange = {
-                                    themeMode = it
-                                    api.updateThemePreferences(it, paletteId)
+                                stories = stories,
+                                isLoading = isLoading,
+                                errorText = statusBanner,
+                                onRefresh = ::refreshAll,
+                                onOpenCatalog = { currentRoute = DesktopRoute.CATALOG },
+                                onOpenCreate = {
+                                    editingBot = null
+                                    if (!api.hasValidToken()) currentRoute = DesktopRoute.AUTH
+                                    else currentRoute = DesktopRoute.CREATE_BOT
                                 },
-                                onPaletteChange = {
-                                    paletteId = it
-                                    api.updateThemePreferences(themeMode, it)
+                                onOpenTavern = {
+                                    if (!api.hasValidToken()) currentRoute = DesktopRoute.AUTH
+                                    else currentRoute = DesktopRoute.TAVERN
                                 },
-                                onLogout = {
-                                    scope.launch {
-                                        api.logout()
-                                        isAuthenticated = false
+                                onSelectBot = ::openChatWith,
+                                onToggleLike = ::toggleBotLike,
+                                onSelectStory = { story ->
+                                    if (!api.hasValidToken()) {
+                                        currentRoute = DesktopRoute.AUTH
+                                    } else {
+                                        selectedStory = story
+                                        currentRoute = DesktopRoute.STORY_READER
                                     }
                                 }
                             )
+
+                            DesktopRoute.CATALOG -> CatalogPage(
+                                api = api,
+                                bots = bots,
+                                isLoading = isLoading,
+                                errorText = statusBanner,
+                                onRefresh = ::refreshAll,
+                                onSelectBot = ::openChatWith,
+                                onToggleLike = ::toggleBotLike
+                            )
+
+                            DesktopRoute.COLLECTION -> CollectionPage(
+                                api = api,
+                                createdBots = myBots,
+                                likedBots = bots.filter { it.isLiked },
+                                createdStories = myStories,
+                                allStories = stories,
+                                onSelectBot = ::openChatWith,
+                                onToggleLike = ::toggleBotLike,
+                                onCreateBot = {
+                                    editingBot = null
+                                    currentRoute = DesktopRoute.CREATE_BOT
+                                },
+                                onEditBot = { bot ->
+                                    editingBot = bot
+                                    currentRoute = DesktopRoute.CREATE_BOT
+                                },
+                                onDeleteBot = { bot ->
+                                    scope.launch {
+                                        runCatching { api.deleteBot(bot.id) }
+                                        refreshAll()
+                                    }
+                                },
+                                onSelectStory = { story ->
+                                    selectedStory = story
+                                    currentRoute = DesktopRoute.STORY_READER
+                                }
+                            )
+
+                            DesktopRoute.CREATE_BOT -> CreateBotPage(
+                                api = api,
+                                existingBot = editingBot,
+                                onSaved = { saved ->
+                                    editingBot = null
+                                    refreshAll()
+                                    openChatWith(saved)
+                                },
+                                onCancel = { currentRoute = DesktopRoute.COLLECTION }
+                            )
+
+                            DesktopRoute.PROFILE -> ProfilePage(
+                                api = api,
+                                user = currentUser,
+                                onOpenSettings = { showSettingsModal = true }
+                            )
+
+                            DesktopRoute.CHAT -> {
+                                val bot = selectedBot ?: bots.firstOrNull()
+                                if (bot != null) {
+                                    ChatPage(
+                                        bot = bot,
+                                        api = api,
+                                        wallpapersEnabled = wallpapersEnabled,
+                                        onToggleLike = { toggleBotLike(bot) },
+                                        onBack = { currentRoute = DesktopRoute.HOME }
+                                    )
+                                } else {
+                                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                        Text("Выберите персонажа на главной или в каталоге", color = IskraColors.muted)
+                                    }
+                                }
+                            }
+
+                            DesktopRoute.STORY_READER -> {
+                                val story = selectedStory
+                                if (story != null) {
+                                    StoryReaderPage(
+                                        story = story,
+                                        api = api,
+                                        onBack = { currentRoute = DesktopRoute.HOME }
+                                    )
+                                } else {
+                                    currentRoute = DesktopRoute.HOME
+                                }
+                            }
+
+                            DesktopRoute.TAVERN -> TavernPage(
+                                api = api,
+                                bots = bots,
+                                onOpenBotChat = ::openChatWith
+                            )
+
+                            DesktopRoute.AUTH -> Unit
                         }
                     }
                 }
+            }
+
+            if (showSettingsModal) {
+                SettingsModal(
+                    api = api,
+                    user = currentUser,
+                    currentPalette = palette,
+                    isDark = isDark,
+                    wallpapersEnabled = wallpapersEnabled,
+                    onSaveAppearance = ::saveAppearance,
+                    onUserUpdated = { refreshAll() },
+                    onLogout = {
+                        showSettingsModal = false
+                        scope.launch {
+                            api.logout()
+                            currentUser = null
+                            currentRoute = DesktopRoute.AUTH
+                        }
+                    },
+                    onDismiss = { showSettingsModal = false }
+                )
             }
         }
     }
 }
 
 @Composable
-fun DesktopAuthScreen(api: IskraApiClient, onAuthenticated: () -> Unit) {
-    var mode by remember { mutableStateOf("login") }
-    var step by remember { mutableStateOf("form") }
-    var email by remember { mutableStateOf("") }
-    var displayName by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var newPassword by remember { mutableStateOf("") }
-    var otpCode by remember { mutableStateOf("") }
-    var showPassword by remember { mutableStateOf(false) }
-    var termsAccepted by remember { mutableStateOf(true) }
-    var busy by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+private fun IskraSidebar(
+    api: IskraApiClient,
+    currentRoute: DesktopRoute,
+    user: UserProfile?,
+    isLoggedIn: Boolean,
+    recentBots: List<ApiBot>,
+    selectedBotId: String?,
+    isDark: Boolean,
+    onNavigate: (DesktopRoute) -> Unit,
+    onSelectRecentBot: (ApiBot) -> Unit,
+    onRemoveRecentBot: (ApiBot) -> Unit,
+    onOpenSettings: () -> Unit,
+    onToggleDark: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(264.dp)
+            .fillMaxHeight()
+            .background(IskraColors.surface)
+            .padding(horizontal = 14.dp, vertical = 18.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onNavigate(DesktopRoute.HOME) }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            BrandMark(size = 40.dp)
+            Text(
+                text = "IskraAi",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = IskraColors.text
+            )
+        }
 
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Card(
-            modifier = Modifier.width(420.dp).padding(16.dp),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        Spacer(Modifier.height(14.dp))
+
+        SidebarNavButton(
+            label = "Главная",
+            icon = Icons.Default.Home,
+            active = currentRoute == DesktopRoute.HOME,
+            onClick = { onNavigate(DesktopRoute.HOME) }
+        )
+        SidebarNavButton(
+            label = "Каталог",
+            icon = Icons.Default.GridView,
+            active = currentRoute == DesktopRoute.CATALOG,
+            onClick = { onNavigate(DesktopRoute.CATALOG) }
+        )
+        SidebarNavButton(
+            label = "Коллекция",
+            icon = Icons.Default.FavoriteBorder,
+            active = currentRoute == DesktopRoute.COLLECTION,
+            onClick = { onNavigate(DesktopRoute.COLLECTION) }
+        )
+        SidebarNavButton(
+            label = "Профиль",
+            icon = Icons.Default.Person,
+            active = currentRoute == DesktopRoute.PROFILE,
+            onClick = { onNavigate(DesktopRoute.PROFILE) }
+        )
+
+        Spacer(Modifier.height(10.dp))
+        HorizontalDivider(color = IskraColors.border)
+        Spacer(Modifier.height(10.dp))
+
+        SidebarNavButton(
+            label = "Создать персонажа",
+            icon = Icons.Default.Add,
+            active = currentRoute == DesktopRoute.CREATE_BOT,
+            onClick = { onNavigate(DesktopRoute.CREATE_BOT) }
+        )
+        SidebarNavButton(
+            label = "Таверна",
+            icon = Icons.Default.Groups,
+            active = currentRoute == DesktopRoute.TAVERN,
+            badgeText = "комната",
+            onClick = { onNavigate(DesktopRoute.TAVERN) }
+        )
+
+        if (recentBots.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = IskraColors.border)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                text = "НЕДАВНИЕ ЧАТЫ",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = IskraColors.subtle,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                items(recentBots, key = { it.id }) { bot ->
+                    val isSelected = selectedBotId == bot.id
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSelected) IskraColors.surface2 else Color.Transparent)
+                            .clickable { onSelectRecentBot(bot) }
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        RemoteImage(
+                            url = bot.avatarUrl,
+                            api = api,
+                            modifier = Modifier.size(28.dp).clip(CircleShape),
+                            fallbackText = bot.name
+                        )
+                        Text(
+                            text = bot.name,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal,
+                            color = if (isSelected) IskraColors.text else IskraColors.muted,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "×",
+                            fontSize = 14.sp,
+                            color = IskraColors.subtle,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .clickable { onRemoveRecentBot(bot) }
+                                .padding(horizontal = 4.dp)
+                        )
+                    }
+                }
+            }
+        } else {
+            Spacer(Modifier.weight(1f))
+        }
+
+        HorizontalDivider(color = IskraColors.border)
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (isLoggedIn) {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onOpenSettings() }
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    RemoteImage(
+                        url = user?.avatarUrl,
+                        api = api,
+                        modifier = Modifier.size(32.dp).clip(CircleShape),
+                        fallbackText = user?.displayName ?: "U"
+                    )
+                    Text(
+                        text = user?.displayName?.ifBlank { "Профиль" } ?: "Профиль",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = IskraColors.text,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    UserTierBadge(user?.tier ?: "free")
+                }
+            } else {
+                Button(
+                    onClick = { onNavigate(DesktopRoute.AUTH) },
+                    modifier = Modifier.weight(1f).height(38.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = IskraColors.accent,
+                        contentColor = IskraColors.accentInk
+                    )
+                ) {
+                    Text("Войти", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(10.dp))
+                    .clickable { onToggleDark() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
+                    contentDescription = "Тема",
+                    tint = IskraColors.muted,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+        }
+    }
+    VerticalDivider(color = IskraColors.border, thickness = 1.dp)
+}
+
+@Composable
+private fun SidebarNavButton(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    active: Boolean,
+    badgeText: String? = null,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (active) IskraColors.surface2 else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = label,
+            tint = if (active) IskraColors.text else IskraColors.muted,
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
+            color = if (active) IskraColors.text else IskraColors.muted,
+            modifier = Modifier.weight(1f)
+        )
+        if (badgeText != null) {
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(IskraColors.surface3)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
+                    .padding(horizontal = 7.dp, vertical = 2.dp)
+            ) {
+                Text(badgeText, fontSize = 10.sp, color = IskraColors.muted)
+            }
+        }
+    }
+}
+
+@Composable
+fun CharacterPoster(
+    bot: ApiBot,
+    api: IskraApiClient,
+    onClick: () -> Unit,
+    onToggleLike: () -> Unit,
+    modifier: Modifier = Modifier.width(184.dp).height(246.dp)
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(IskraColors.surface2)
+            .border(1.dp, IskraColors.border, RoundedCornerShape(20.dp))
+            .clickable(onClick = onClick)
+    ) {
+        RemoteImage(
+            url = bot.avatarUrl,
+            api = api,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            fallbackText = bot.name
+        )
+
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.Transparent,
+                        0.45f to Color(0x2E000000),
+                        1.0f to Color(0xEB000000)
+                    )
+                )
+        )
+
+        Row(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
-                modifier = Modifier.padding(28.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(3.dp)
             ) {
-                Box(
-                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(MaterialTheme.colorScheme.primary),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text("I", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Black, fontSize = 28.sp)
-                }
-                Text("IskraAi", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+                Text(
+                    text = bot.name,
+                    color = Color.White,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = (bot.description ?: "").ifBlank { genreLabel(bot.genre) },
+                    color = Color(0xB8FFFFFF),
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-                when (step) {
-                    "otp" -> {
-                        Text("Код подтверждения отправлен на $email", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        OutlinedTextField(
-                            value = otpCode,
-                            onValueChange = { otpCode = it.filter(Char::isDigit).take(6) },
-                            label = { Text("6-значный код") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (error != null) {
-                            Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                        }
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    busy = true
-                                    error = null
-                                    try {
-                                        api.verifyOtp(email, otpCode)
-                                        onAuthenticated()
-                                    } catch (e: Exception) {
-                                        error = e.message ?: "Неверный код"
-                                    } finally {
-                                        busy = false
-                                    }
-                                }
-                            },
-                            enabled = !busy && otpCode.length == 6,
-                            modifier = Modifier.fillMaxWidth().height(46.dp)
-                        ) {
-                            Text(if (busy) "Проверка…" else "Подтвердить")
-                        }
-                        TextButton(onClick = { step = "form"; error = null }) {
-                            Text("Назад")
-                        }
-                    }
-
-                    "reset-request" -> {
-                        Text("Сброс пароля", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            label = { Text("Электронная почта") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (error != null) {
-                            Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                        }
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    busy = true
-                                    error = null
-                                    try {
-                                        api.requestPasswordReset(email)
-                                        step = "reset-verify"
-                                    } catch (e: Exception) {
-                                        error = e.message ?: "Не удалось отправить код"
-                                    } finally {
-                                        busy = false
-                                    }
-                                }
-                            },
-                            enabled = !busy && email.isNotBlank(),
-                            modifier = Modifier.fillMaxWidth().height(46.dp)
-                        ) {
-                            Text(if (busy) "Отправка…" else "Получить код сброса")
-                        }
-                        TextButton(onClick = { step = "form"; error = null }) {
-                            Text("Вернуться ко входу")
-                        }
-                    }
-
-                    "reset-verify" -> {
-                        Text("Новый пароль", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        OutlinedTextField(
-                            value = otpCode,
-                            onValueChange = { otpCode = it.filter(Char::isDigit).take(6) },
-                            label = { Text("6-значный код из письма") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        OutlinedTextField(
-                            value = newPassword,
-                            onValueChange = { newPassword = it },
-                            label = { Text("Новый пароль (мин. 8 символов)") },
-                            singleLine = true,
-                            visualTransformation = PasswordVisualTransformation(),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (error != null) {
-                            Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                        }
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    busy = true
-                                    error = null
-                                    try {
-                                        val res = api.resetPassword(email, otpCode, newPassword)
-                                        if (res.session != null) {
-                                            onAuthenticated()
-                                        } else {
-                                            password = newPassword
-                                            mode = "login"
-                                            step = "form"
-                                        }
-                                    } catch (e: Exception) {
-                                        error = e.message ?: "Ошибка смены пароля"
-                                    } finally {
-                                        busy = false
-                                    }
-                                }
-                            },
-                            enabled = !busy && otpCode.length == 6 && newPassword.length >= 8,
-                            modifier = Modifier.fillMaxWidth().height(46.dp)
-                        ) {
-                            Text(if (busy) "Сохранение…" else "Сменить пароль")
-                        }
-                    }
-
-                    else -> {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surfaceVariant).padding(4.dp)
-                        ) {
-                            TabButton("Вход", mode == "login", Modifier.weight(1f)) { mode = "login"; error = null }
-                            TabButton("Регистрация", mode == "register", Modifier.weight(1f)) { mode = "register"; error = null }
-                        }
-
-                        if (mode == "register") {
-                            OutlinedTextField(
-                                value = displayName,
-                                onValueChange = { displayName = it },
-                                label = { Text("Имя или псевдоним") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
-
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            label = { Text("Электронная почта") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        OutlinedTextField(
-                            value = password,
-                            onValueChange = { password = it },
-                            label = { Text("Пароль") },
-                            singleLine = true,
-                            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                            trailingIcon = {
-                                IconButton(onClick = { showPassword = !showPassword }) {
-                                    Icon(if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility, contentDescription = null)
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        if (mode == "login") {
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                TextButton(onClick = { step = "reset-request"; error = null }) {
-                                    Text("Забыли пароль?", fontSize = 12.sp)
-                                }
-                            }
-                        } else {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.fillMaxWidth().clickable { termsAccepted = !termsAccepted }
-                            ) {
-                                Checkbox(checked = termsAccepted, onCheckedChange = { termsAccepted = it })
-                                Text("Принимаю правила и политику конфиденциальности (18+)", fontSize = 12.sp)
-                            }
-                        }
-
-                        if (error != null) {
-                            Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                        }
-
-                        Button(
-                            onClick = {
-                                scope.launch {
-                                    busy = true
-                                    error = null
-                                    try {
-                                        if (mode == "login") {
-                                            api.login(email, password)
-                                            onAuthenticated()
-                                        } else {
-                                            api.requestOtp(email, displayName, password, false)
-                                            otpCode = ""
-                                            step = "otp"
-                                        }
-                                    } catch (e: Exception) {
-                                        error = e.message ?: "Ошибка авторизации"
-                                    } finally {
-                                        busy = false
-                                    }
-                                }
-                            },
-                            enabled = !busy && email.isNotBlank() && password.length >= 8 && (mode == "login" || (displayName.isNotBlank() && termsAccepted)),
-                            modifier = Modifier.fillMaxWidth().height(46.dp)
-                        ) {
-                            Text(if (busy) "Подождите…" else if (mode == "login") "Войти" else "Создать аккаунт")
-                        }
-                    }
-                }
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(if (bot.isLiked) Color(0x99F43F5E) else Color(0x8C000000))
+                    .border(
+                        1.dp,
+                        if (bot.isLiked) Color(0xCCF43F5E) else Color(0x24FFFFFF),
+                        RoundedCornerShape(999.dp)
+                    )
+                    .clickable { onToggleLike() }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Icon(
+                    imageVector = if (bot.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Нравится",
+                    tint = Color.White,
+                    modifier = Modifier.size(11.dp)
+                )
+                Text(
+                    text = bot.likesCount.toString(),
+                    color = Color.White,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium
+                )
             }
         }
     }
 }
 
 @Composable
-private fun TabButton(text: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Surface(
-        modifier = modifier.clip(RoundedCornerShape(9.dp)).clickable(onClick = onClick),
-        color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
-        shape = RoundedCornerShape(9.dp)
+fun StoryCardItem(
+    story: StorySummary,
+    api: IskraApiClient,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier.width(260.dp)
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(IskraColors.surface)
+            .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
     ) {
-        Box(modifier = Modifier.padding(vertical = 8.dp), contentAlignment = Alignment.Center) {
-            Text(text, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 13.sp)
+        if (!story.coverUrl.isNullOrBlank()) {
+            RemoteImage(
+                url = story.coverUrl,
+                api = api,
+                modifier = Modifier.fillMaxWidth().height(126.dp),
+                contentScale = ContentScale.Crop,
+                fallbackText = story.title
+            )
+        }
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "ИСТОРИЯ",
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = IskraColors.subtle
+                )
+                if (story.likesCount > 0) {
+                    Text("♥ ${story.likesCount}", fontSize = 11.sp, color = IskraColors.muted)
+                }
+            }
+            Text(
+                text = story.title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = IskraColors.text,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = story.description.ifBlank { story.subtitle.ifBlank { "Интерактивная история" } },
+                fontSize = 13.sp,
+                color = IskraColors.muted,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
 
 @Composable
-fun DesktopCatalogView(
+private fun HomePage(
     api: IskraApiClient,
     bots: List<ApiBot>,
-    onBotsUpdated: (List<ApiBot>) -> Unit,
-    onOpenChat: (ApiBot) -> Unit
+    stories: List<StorySummary>,
+    isLoading: Boolean,
+    errorText: String?,
+    onRefresh: () -> Unit,
+    onOpenCatalog: () -> Unit,
+    onOpenCreate: () -> Unit,
+    onOpenTavern: () -> Unit,
+    onSelectBot: (ApiBot) -> Unit,
+    onToggleLike: (ApiBot) -> Unit,
+    onSelectStory: (StorySummary) -> Unit
 ) {
-    var search by remember { mutableStateOf("") }
-    var selectedGenre by remember { mutableStateOf("all") }
-    var loading by remember { mutableStateOf(bots.isEmpty()) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+    val popularBots = remember(bots) {
+        bots.sortedByDescending { it.likesCount }.take(12)
+    }
 
-    fun reload() {
-        scope.launch {
-            loading = true
-            error = null
-            try {
-                onBotsUpdated(api.getBots())
-            } catch (e: Exception) {
-                error = e.message ?: "Не удалось загрузить каталог"
-            } finally {
-                loading = false
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(32.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(24.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(IskraColors.surface2, IskraColors.surface)
+                    )
+                )
+                .border(1.dp, IskraColors.border, RoundedCornerShape(24.dp))
+                .padding(horizontal = 40.dp, vertical = 36.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f).padding(end = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(IskraColors.surface)
+                            .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
+                            .padding(horizontal = 12.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("✦", fontSize = 11.sp, color = IskraColors.text)
+                        Text(
+                            text = "ISKRAAI",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = IskraColors.muted
+                        )
+                    }
+
+                    Text(
+                        text = "Начните новую историю",
+                        fontSize = 34.sp,
+                        lineHeight = 40.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = IskraColors.text
+                    )
+                    Text(
+                        text = "Выберите героя или авторский сюжет. Ваши решения меняют происходящее.",
+                        fontSize = 15.sp,
+                        color = IskraColors.muted
+                    )
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Button(
+                            onClick = onOpenCatalog,
+                            shape = RoundedCornerShape(999.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = IskraColors.accent,
+                                contentColor = IskraColors.accentInk
+                            ),
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp)
+                        ) {
+                            Text("Каталог", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+
+                        OutlinedButton(
+                            onClick = onOpenCreate,
+                            shape = RoundedCornerShape(999.dp),
+                            border = BorderStroke(1.dp, IskraColors.borderStrong),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = IskraColors.surface2,
+                                contentColor = IskraColors.text
+                            ),
+                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp)
+                        ) {
+                            Text("+ Создать", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+
+                Box(
+                    modifier = Modifier
+                        .size(184.dp)
+                        .clip(CircleShape)
+                        .border(1.dp, IskraColors.borderStrong, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(128.dp)
+                            .clip(CircleShape)
+                            .background(IskraColors.surface)
+                            .border(1.dp, IskraColors.border, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            BrandMark(size = 28.dp)
+                            Text(
+                                text = "Истории\nотвечают",
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                color = IskraColors.muted,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (errorText != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(IskraColors.surface)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(14.dp))
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(errorText, color = IskraColors.muted, fontSize = 13.sp)
+                TextButton(onClick = onRefresh) {
+                    Text("Повторить", color = IskraColors.text)
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Text(
+                    text = "Популярные персонажи",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = IskraColors.text
+                )
+                Text(
+                    text = "Все →",
+                    fontSize = 13.sp,
+                    color = IskraColors.muted,
+                    modifier = Modifier.clickable { onOpenCatalog() }
+                )
+            }
+
+            if (isLoading && popularBots.isEmpty()) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    repeat(5) {
+                        Box(
+                            modifier = Modifier
+                                .width(184.dp)
+                                .height(246.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(IskraColors.surface2)
+                        )
+                    }
+                }
+            } else if (popularBots.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(IskraColors.surface)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Персонажи пока не добавлены.", color = IskraColors.muted)
+                }
+            } else {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(popularBots, key = { it.id }) { bot ->
+                        CharacterPoster(
+                            bot = bot,
+                            api = api,
+                            onClick = { onSelectBot(bot) },
+                            onToggleLike = { onToggleLike(bot) }
+                        )
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                .clickable { onOpenTavern() }
+                .padding(horizontal = 24.dp, vertical = 22.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(
+                modifier = Modifier.weight(1f).padding(end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Таверна",
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = IskraColors.text
+                )
+                Text(
+                    text = "Не знаешь с кем пообщаться? Случайный собеседник, дуэт или трио в одной комнате.",
+                    fontSize = 13.sp,
+                    color = IskraColors.muted
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(IskraColors.surface2)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
+                    .padding(horizontal = 16.dp, vertical = 9.dp)
+            ) {
+                Text("Перейти →", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Text(
+                    text = "Истории",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = IskraColors.text
+                )
+                Text(
+                    text = "Все →",
+                    fontSize = 13.sp,
+                    color = IskraColors.muted,
+                    modifier = Modifier.clickable { onOpenCatalog() }
+                )
+            }
+
+            if (stories.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(IskraColors.surface)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                        .padding(28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Интерактивные истории скоро появятся.", color = IskraColors.muted)
+                }
+            } else {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(stories.take(10), key = { it.id }) { story ->
+                        StoryCardItem(
+                            story = story,
+                            api = api,
+                            onClick = { onSelectStory(story) }
+                        )
+                    }
+                }
             }
         }
     }
+}
 
-    LaunchedEffect(Unit) {
-        if (bots.isEmpty()) reload()
-    }
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CatalogPage(
+    api: IskraApiClient,
+    bots: List<ApiBot>,
+    isLoading: Boolean,
+    errorText: String?,
+    onRefresh: () -> Unit,
+    onSelectBot: (ApiBot) -> Unit,
+    onToggleLike: (ApiBot) -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedGenre by remember { mutableStateOf<String?>(null) }
 
-    val filtered = remember(bots, search, selectedGenre) {
+    val visibleBots = remember(bots, searchQuery, selectedGenre) {
         bots.filter { bot ->
-            val matchesGenre = selectedGenre == "all" || bot.genre == selectedGenre
-            val matchesQuery = search.isBlank() ||
-                bot.name.contains(search, ignoreCase = true) ||
-                (bot.description?.contains(search, ignoreCase = true) == true)
-            matchesGenre && matchesQuery
+            val matchesQuery = searchQuery.isBlank() ||
+                bot.name.contains(searchQuery, ignoreCase = true) ||
+                (bot.description ?: "").contains(searchQuery, ignoreCase = true)
+            val matchesGenre = selectedGenre == null || bot.genre == selectedGenre
+            matchesQuery && matchesGenre
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = "ВСЕ ПЕРСОНАЖИ",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = IskraColors.subtle
+            )
+            Text(
+                text = "Каталог",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = IskraColors.text
+            )
+            Text(
+                text = "Персонажи разделены по жанрам и отсортированы по лайкам.",
+                fontSize = 14.sp,
+                color = IskraColors.muted
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Найти персонажа", color = IskraColors.subtle, fontSize = 14.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = IskraColors.muted) },
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedContainerColor = IskraColors.surface,
+                    unfocusedContainerColor = IskraColors.surface,
+                    focusedBorderColor = IskraColors.borderStrong,
+                    unfocusedBorderColor = IskraColors.border,
+                    focusedTextColor = IskraColors.text,
+                    unfocusedTextColor = IskraColors.text
+                ),
+                modifier = Modifier.width(300.dp)
+            )
+
+            LazyRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChipButton(
+                        label = "Жанры (Все)",
+                        active = selectedGenre == null,
+                        onClick = { selectedGenre = null }
+                    )
+                }
+                items(GENRE_LABELS) { (key, label) ->
+                    val active = selectedGenre == key
+                    FilterChipButton(
+                        label = label,
+                        active = active,
+                        onClick = { selectedGenre = if (active) null else key }
+                    )
+                }
+            }
+        }
+
+        if (isLoading && bots.isEmpty()) {
+            Box(Modifier.fillMaxWidth().padding(48.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = IskraColors.text)
+            }
+        } else if (errorText != null && bots.isEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(IskraColors.surface)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(16.dp))
+                    .padding(20.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(errorText, color = IskraColors.muted)
+                TextButton(onClick = onRefresh) { Text("Повторить", color = IskraColors.text) }
+            }
+        } else {
+            if (visibleBots.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Популярное", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        items(visibleBots.take(10), key = { "pop-${it.id}" }) { bot ->
+                            CharacterPoster(
+                                bot = bot,
+                                api = api,
+                                onClick = { onSelectBot(bot) },
+                                onToggleLike = { onToggleLike(bot) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            GENRE_LABELS.forEach { (genreKey, genreTitle) ->
+                val genreBots = visibleBots.filter { it.genre == genreKey }
+                if (genreBots.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            Text(genreTitle, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                            Text("${genreBots.size}", fontSize = 12.sp, color = IskraColors.muted)
+                        }
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            items(genreBots, key = { "${genreKey}-${it.id}" }) { bot ->
+                                CharacterPoster(
+                                    bot = bot,
+                                    api = api,
+                                    onClick = { onSelectBot(bot) },
+                                    onToggleLike = { onToggleLike(bot) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FilterChipButton(label: String, active: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(if (active) IskraColors.text else IskraColors.surface)
+            .border(1.dp, if (active) IskraColors.text else IskraColors.border, RoundedCornerShape(999.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
+            color = if (active) IskraColors.canvas else IskraColors.muted
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CollectionPage(
+    api: IskraApiClient,
+    createdBots: List<ApiBot>,
+    likedBots: List<ApiBot>,
+    createdStories: List<StorySummary>,
+    allStories: List<StorySummary>,
+    onSelectBot: (ApiBot) -> Unit,
+    onToggleLike: (ApiBot) -> Unit,
+    onCreateBot: () -> Unit,
+    onEditBot: (ApiBot) -> Unit,
+    onDeleteBot: (ApiBot) -> Unit,
+    onSelectStory: (StorySummary) -> Unit
+) {
+    var mainTab by remember { mutableStateOf("created") }
+    var subTab by remember { mutableStateOf("bots") }
+
+    val currentBots = if (mainTab == "created") createdBots else likedBots
+    val currentStories = if (mainTab == "created") createdStories else allStories.filter { it.likesCount > 0 }
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text("Каталог персонажей", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                Text("Выберите персонажа для живого ролевого диалога", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
-                    value = search,
-                    onValueChange = { search = it },
-                    placeholder = { Text("Поиск персонажей…") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    singleLine = true,
-                    modifier = Modifier.width(280.dp)
+            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                Text(
+                    text = "Созданное",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (mainTab == "created") IskraColors.text else IskraColors.subtle,
+                    modifier = Modifier.clickable { mainTab = "created" }
                 )
-                IconButton(onClick = ::reload) {
-                    Icon(Icons.Default.Refresh, contentDescription = "Обновить")
+                Text(
+                    text = "Избранное",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (mainTab == "liked") IskraColors.text else IskraColors.subtle,
+                    modifier = Modifier.clickable { mainTab = "liked" }
+                )
+            }
+
+            Button(
+                onClick = onCreateBot,
+                shape = RoundedCornerShape(999.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = IskraColors.accent,
+                    contentColor = IskraColors.accentInk
+                )
+            ) {
+                Text("+ Персонаж", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(12.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val botsActive = subTab == "bots"
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (botsActive) IskraColors.surface2 else Color.Transparent)
+                    .clickable { subTab = "bots" }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "Персонажи (${currentBots.size})",
+                    fontSize = 13.sp,
+                    fontWeight = if (botsActive) FontWeight.Medium else FontWeight.Normal,
+                    color = if (botsActive) IskraColors.text else IskraColors.muted
+                )
+            }
+            val storiesActive = subTab == "stories"
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (storiesActive) IskraColors.surface2 else Color.Transparent)
+                    .clickable { subTab = "stories" }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = "Истории (${currentStories.size})",
+                    fontSize = 13.sp,
+                    fontWeight = if (storiesActive) FontWeight.Medium else FontWeight.Normal,
+                    color = if (storiesActive) IskraColors.text else IskraColors.muted
+                )
+            }
+        }
+
+        if (subTab == "bots") {
+            if (currentBots.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(IskraColors.surface)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                        .padding(40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (mainTab == "created") "Вы ещё не создали ни одного персонажа." else "В избранном пока нет персонажей.",
+                        color = IskraColors.muted
+                    )
                 }
-            }
-        }
-
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(GENRE_LABELS.entries.toList()) { (key, label) ->
-                FilterChip(
-                    selected = selectedGenre == key,
-                    onClick = { selectedGenre = key },
-                    label = { Text(label, fontSize = 12.sp) }
-                )
-            }
-        }
-
-        if (loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (error != null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(error!!, color = MaterialTheme.colorScheme.error)
-                    Button(onClick = ::reload) { Text("Повторить") }
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    currentBots.forEach { bot ->
+                        Box {
+                            CharacterPoster(
+                                bot = bot,
+                                api = api,
+                                onClick = { onSelectBot(bot) },
+                                onToggleLike = { onToggleLike(bot) }
+                            )
+                            if (mainTab == "created") {
+                                Row(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(8.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xB3000000))
+                                            .clickable { onEditBot(bot) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Edit, contentDescription = "Изменить", tint = Color.White, modifier = Modifier.size(14.dp))
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xB3000000))
+                                            .clickable { onDeleteBot(bot) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Удалить", tint = Color(0xFFF87171), modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 270.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.fillMaxSize()
+            if (currentStories.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(18.dp))
+                        .background(IskraColors.surface)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                        .padding(40.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("Историй в этом разделе пока нет.", color = IskraColors.muted)
+                }
+            } else {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    currentStories.forEach { story ->
+                        StoryCardItem(
+                            story = story,
+                            api = api,
+                            onClick = { onSelectStory(story) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CreateBotPage(
+    api: IskraApiClient,
+    existingBot: ApiBot?,
+    onSaved: (ApiBot) -> Unit,
+    onCancel: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var name by remember(existingBot) { mutableStateOf(existingBot?.name ?: "") }
+    var description by remember(existingBot) { mutableStateOf(existingBot?.description ?: "") }
+    var avatarUrl by remember(existingBot) { mutableStateOf(existingBot?.avatarUrl ?: "") }
+    var systemPrompt by remember(existingBot) { mutableStateOf(existingBot?.systemPrompt ?: "") }
+    var genre by remember(existingBot) { mutableStateOf(existingBot?.genre ?: "fantasy") }
+    var busy by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+
+    val previewBot = ApiBot(
+        id = existingBot?.id ?: "preview",
+        name = name.ifBlank { "Имя персонажа" },
+        description = description.ifBlank { "Краткое описание героя" },
+        avatarUrl = avatarUrl.ifBlank { null },
+        genre = genre
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        horizontalArrangement = Arrangement.spacedBy(28.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .width(260.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(20.dp))
+                .padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text("Предпросмотр", fontSize = 12.sp, color = IskraColors.subtle)
+            CharacterPoster(
+                bot = previewBot,
+                api = api,
+                onClick = {},
+                onToggleLike = {},
+                modifier = Modifier.width(200.dp).height(266.dp)
+            )
+            Text(
+                text = genreLabel(genre),
+                fontSize = 12.sp,
+                color = IskraColors.muted
+            )
+        }
+
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState())
+                .clip(RoundedCornerShape(20.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(20.dp))
+                .padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Text(
+                text = if (existingBot != null) "Редактировать персонажа" else "Создать персонажа",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = IskraColors.text
+            )
+
+            IskraField(value = name, onValueChange = { name = it }, label = "Имя персонажа", placeholder = "Например: Мира Вельская")
+            IskraField(value = description, onValueChange = { description = it }, label = "Краткое описание (в карточке)", placeholder = "Кто этот персонаж и с чего начинается история")
+            IskraField(value = avatarUrl, onValueChange = { avatarUrl = it }, label = "URL аватара (необязательно)", placeholder = "https://...")
+            IskraField(
+                value = systemPrompt,
+                onValueChange = { systemPrompt = it },
+                label = "Характер, сценарий и поведение (System Prompt)",
+                placeholder = "Опишите личность, предысторию, манеру речи и стартовую сцену...",
+                minLines = 6
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Жанр", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    GENRE_LABELS.forEach { (key, label) ->
+                        FilterChipButton(
+                            label = label,
+                            active = genre == key,
+                            onClick = { genre = key }
+                        )
+                    }
+                }
+            }
+
+            if (errorMsg != null) {
+                Text(errorMsg!!, color = IskraColors.danger, fontSize = 13.sp)
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button(
+                    onClick = {
+                        if (name.isBlank() || description.isBlank() || systemPrompt.isBlank()) {
+                            errorMsg = "Заполните имя, описание и характер персонажа"
+                            return@Button
+                        }
+                        scope.launch {
+                            busy = true
+                            errorMsg = null
+                            runCatching {
+                                val req = CreateBotRequest(
+                                    name = name.trim(),
+                                    genre = genre,
+                                    description = description.trim(),
+                                    systemPrompt = systemPrompt.trim(),
+                                    avatarUrl = avatarUrl.trim().ifBlank { null }
+                                )
+                                if (existingBot != null) api.updateBot(existingBot.id, req)
+                                else api.createBot(req)
+                            }.onSuccess { saved ->
+                                onSaved(saved)
+                            }.onFailure { e ->
+                                errorMsg = e.message ?: "Ошибка сохранения"
+                            }
+                            busy = false
+                        }
+                    },
+                    enabled = !busy,
+                    shape = RoundedCornerShape(999.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = IskraColors.accent,
+                        contentColor = IskraColors.accentInk
+                    )
+                ) {
+                    Text(if (busy) "Сохранение..." else "Сохранить персонажа", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }
+
+                OutlinedButton(
+                    onClick = onCancel,
+                    shape = RoundedCornerShape(999.dp),
+                    border = BorderStroke(1.dp, IskraColors.border)
+                ) {
+                    Text("Отмена", color = IskraColors.muted)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ProfilePage(
+    api: IskraApiClient,
+    user: UserProfile?,
+    onOpenSettings: () -> Unit
+) {
+    val remaining = user?.points?.remaining ?: 100
+    val total = (user?.points?.total ?: 100).coerceAtLeast(1)
+    val progress = (remaining.toFloat() / total.toFloat()).coerceIn(0f, 1f)
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(20.dp))
+                .padding(24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                items(filtered, key = { it.id }) { bot ->
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier.fillMaxWidth().clickable { onOpenChat(bot) }
+                RemoteImage(
+                    url = user?.avatarUrl,
+                    api = api,
+                    modifier = Modifier.size(64.dp).clip(CircleShape),
+                    fallbackText = user?.displayName ?: "U"
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Box(
-                                    modifier = Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.surfaceVariant),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        bot.name.take(2).uppercase(),
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(bot.name, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(
-                                        GENRE_LABELS[bot.genre] ?: bot.genre,
-                                        fontSize = 11.sp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                                TextButton(
-                                    onClick = {
-                                        scope.launch {
-                                            try {
-                                                val res = api.toggleBotLike(bot.id)
-                                                onBotsUpdated(
-                                                    bots.map {
-                                                        if (it.id == bot.id) it.copy(isLiked = res.isLiked, likesCount = res.likesCount) else it
-                                                    }
-                                                )
-                                            } catch (_: Exception) {}
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        if (bot.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                        contentDescription = null,
-                                        tint = if (bot.isLiked) Color(0xFFF43F5E) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(bot.likesCount.toString(), fontSize = 12.sp)
-                                }
-                            }
+                        Text(
+                            text = user?.displayName?.ifBlank { "Пользователь" } ?: "Пользователь",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = IskraColors.text
+                        )
+                        UserTierBadge(user?.tier ?: "free")
+                    }
+                    Text(user?.email ?: "", fontSize = 13.sp, color = IskraColors.muted)
+                }
+            }
 
-                            Text(
-                                bot.description ?: "Без описания",
-                                fontSize = 13.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 3,
-                                minLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
+            OutlinedButton(
+                onClick = onOpenSettings,
+                shape = RoundedCornerShape(999.dp),
+                border = BorderStroke(1.dp, IskraColors.borderStrong),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = IskraColors.surface2,
+                    contentColor = IskraColors.text
+                )
+            ) {
+                Icon(Icons.Default.Settings, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Настройки", fontSize = 13.sp)
+            }
+        }
 
-                            Button(
-                                onClick = { onOpenChat(bot) },
-                                modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(20.dp))
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("Искры для общения", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                    Text("Ежедневный запас энергии для сообщений", fontSize = 12.sp, color = IskraColors.muted)
+                }
+                Text("✦ $remaining / $total", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+            }
+            LinearProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(999.dp)),
+                color = IskraColors.accent,
+                trackColor = IskraColors.surface3
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text("Тарифы", fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                PlanCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Базовый",
+                    price = "Бесплатно",
+                    features = listOf("Ежедневные искры для диалогов", "Доступ к каталогу и историям", "Создание собственных персонажей"),
+                    current = (user?.tier ?: "free").lowercase() == "free"
+                )
+                PlanCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Iskra PRO",
+                    price = "299 ₽ / мес",
+                    features = listOf("Увеличенный запас искр", "Расширенная память диалогов", "Приоритетная скорость генерации"),
+                    current = (user?.tier ?: "").lowercase() == "pro"
+                )
+                PlanCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Iskra MAX",
+                    price = "599 ₽ / мес",
+                    features = listOf("Флагманская ролевая модель", "Максимальная длина ответов", "Глубокий контекст и значок MAX"),
+                    current = (user?.tier ?: "").lowercase() == "max"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlanCard(
+    modifier: Modifier,
+    title: String,
+    price: String,
+    features: List<String>,
+    current: Boolean
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(IskraColors.surface)
+            .border(
+                1.dp,
+                if (current) IskraColors.borderStrong else IskraColors.border,
+                RoundedCornerShape(18.dp)
+            )
+            .padding(22.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+            if (current) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(IskraColors.surface2)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                ) {
+                    Text("Активен", fontSize = 11.sp, color = IskraColors.text)
+                }
+            }
+        }
+        Text(price, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+        HorizontalDivider(color = IskraColors.border)
+        features.forEach { feat ->
+            Text("• $feat", fontSize = 13.sp, color = IskraColors.muted)
+        }
+    }
+}
+
+@Composable
+private fun SettingsModal(
+    api: IskraApiClient,
+    user: UserProfile?,
+    currentPalette: String,
+    isDark: Boolean,
+    wallpapersEnabled: Boolean,
+    onSaveAppearance: (String, Boolean, Boolean) -> Unit,
+    onUserUpdated: () -> Unit,
+    onLogout: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var tab by remember { mutableStateOf("appearance") }
+    var name by remember(user) { mutableStateOf(user?.displayName ?: "") }
+    var avatar by remember(user) { mutableStateOf(user?.avatarUrl ?: "") }
+    var statusMsg by remember { mutableStateOf<String?>(null) }
+
+    val palettes = listOf(
+        Triple("classic", "Классика", Color(0xFFF5F5F4)),
+        Triple("lavender", "Лаванда", Color(0xFFA78BFA)),
+        Triple("terracotta", "Терракота", Color(0xFFEA7A57)),
+        Triple("blue", "Океан", Color(0xFF60A5FA)),
+        Triple("emerald", "Изумруд", Color(0xFF34D399))
+    )
+
+    Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .width(520.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.borderStrong, RoundedCornerShape(22.dp))
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Настройки", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                Text(
+                    text = "✕",
+                    fontSize = 16.sp,
+                    color = IskraColors.muted,
+                    modifier = Modifier.clickable { onDismiss() }.padding(4.dp)
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(IskraColors.surface2)
+                    .padding(4.dp)
+            ) {
+                listOf("appearance" to "Оформление", "profile" to "Профиль").forEach { (key, label) ->
+                    val active = tab == key
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (active) IskraColors.text else Color.Transparent)
+                            .clickable { tab = key }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (active) IskraColors.canvas else IskraColors.muted
+                        )
+                    }
+                }
+            }
+
+            if (tab == "appearance") {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("Режим темы", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        FilterChipButton(
+                            label = "Тёмная",
+                            active = isDark,
+                            onClick = { onSaveAppearance(currentPalette, true, wallpapersEnabled) }
+                        )
+                        FilterChipButton(
+                            label = "Светлая",
+                            active = !isDark,
+                            onClick = { onSaveAppearance(currentPalette, false, wallpapersEnabled) }
+                        )
+                    }
+
+                    Text("Цветовая палитра", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        palettes.forEach { (id, title, swatch) ->
+                            val active = currentPalette == id
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(IskraColors.surface2)
+                                    .border(
+                                        1.dp,
+                                        if (active) IskraColors.text else IskraColors.border,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { onSaveAppearance(id, isDark, wallpapersEnabled) }
+                                    .padding(vertical = 10.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                Text("Открыть диалог")
+                                Box(
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .clip(CircleShape)
+                                        .background(swatch)
+                                        .border(1.dp, Color(0x44000000), CircleShape)
+                                )
+                                Text(title, fontSize = 11.sp, color = if (active) IskraColors.text else IskraColors.muted)
                             }
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Checkbox(
+                            checked = wallpapersEnabled,
+                            onCheckedChange = { onSaveAppearance(currentPalette, isDark, it) }
+                        )
+                        Text("Атмосферный фон в чате", fontSize = 13.sp, color = IskraColors.text)
+                    }
+                }
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    IskraField(value = name, onValueChange = { name = it }, label = "Отображаемое имя", placeholder = "Ваше имя")
+                    IskraField(value = avatar, onValueChange = { avatar = it }, label = "URL аватара", placeholder = "https://...")
+
+                    if (statusMsg != null) {
+                        Text(statusMsg!!, fontSize = 12.sp, color = IskraColors.muted)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        api.updateProfile(
+                                            displayName = name.trim().ifBlank { null },
+                                            avatarUrl = avatar.trim().ifBlank { null }
+                                        )
+                                        onUserUpdated()
+                                        statusMsg = "Профиль обновлён"
+                                    }.onFailure { e ->
+                                        statusMsg = e.message ?: "Ошибка сохранения"
+                                    }
+                                }
+                            },
+                            shape = RoundedCornerShape(999.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = IskraColors.accent,
+                                contentColor = IskraColors.accentInk
+                            )
+                        ) {
+                            Text("Сохранить", fontSize = 13.sp)
+                        }
+
+                        TextButton(onClick = onLogout) {
+                            Text("Выйти из аккаунта", color = IskraColors.danger, fontSize = 13.sp)
                         }
                     }
                 }
@@ -670,45 +2131,30 @@ fun DesktopCatalogView(
 }
 
 @Composable
-fun DesktopChatView(
+private fun ChatPage(
+    bot: ApiBot,
     api: IskraApiClient,
-    bots: List<ApiBot>,
-    initialBot: ApiBot?,
-    remainingPoints: Int?,
-    onPointsUpdated: (Int) -> Unit
+    wallpapersEnabled: Boolean,
+    onToggleLike: () -> Unit,
+    onBack: () -> Unit
 ) {
-    var activeBot by remember(initialBot) { mutableStateOf(initialBot ?: bots.firstOrNull()) }
-    var conversationId by remember { mutableStateOf<String?>(null) }
-    var messages by remember { mutableStateOf<List<Message>>(emptyList()) }
-    var affinity by remember { mutableStateOf("neutral") }
-    var input by remember { mutableStateOf("") }
-    var editingId by remember { mutableStateOf<String?>(null) }
-    var editText by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(false) }
-    var sending by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+    val listState = rememberLazyListState()
+    var conversationId by remember(bot.id) { mutableStateOf<String?>(null) }
+    var messages by remember(bot.id) { mutableStateOf<List<Message>>(emptyList()) }
+    var input by remember { mutableStateOf("") }
+    var isSending by remember { mutableStateOf(false) }
+    var showIntro by remember { mutableStateOf(true) }
+    var showBotModal by remember { mutableStateOf(false) }
 
-    LaunchedEffect(activeBot?.id) {
-        val bot = activeBot ?: return@LaunchedEffect
-        loading = true
-        error = null
-        affinity = parseInitialAffinity(bot.systemPrompt)
-        try {
+    LaunchedEffect(bot.id) {
+        runCatching {
             val convs = api.getConversations()
-            val conv = convs.find { it.botId == bot.id } ?: api.createConversation(bot.id)
+            val existing = convs.firstOrNull { it.botId == bot.id }
+            val conv = existing ?: api.createConversation(bot.id)
             conversationId = conv.id
-            val page = api.getMessages(conv.id)
-            messages = page.items.map { msg ->
-                val (clean, level) = extractAffinity(msg.content)
-                if (level != null && AFFINITY_LABELS.containsKey(level)) affinity = level
-                msg.copy(content = clean, versions = listOf(clean), versionIndex = 0)
-            }
-        } catch (e: Exception) {
-            error = e.message ?: "Не удалось загрузить диалог"
-        } finally {
-            loading = false
+            messages = api.getMessages(conv.id).items
         }
     }
 
@@ -719,483 +2165,344 @@ fun DesktopChatView(
     }
 
     fun sendCurrentMessage() {
-        val convId = conversationId ?: return
-        val content = input.trim()
-        if (content.isEmpty() || sending || remainingPoints == 0) return
+        val text = input.trim()
+        val cid = conversationId ?: return
+        if (text.isEmpty() || isSending) return
         input = ""
-        sending = true
-        error = null
-
-        val tempUser = Message(id = "temp-u-${System.currentTimeMillis()}", conversationId = convId, sender = "user", content = content)
-        messages = messages + tempUser
-
+        val optimistic = Message(
+            id = "temp-${System.currentTimeMillis()}",
+            conversationId = cid,
+            sender = "user",
+            content = text
+        )
+        messages = messages + optimistic
         scope.launch {
-            try {
-                val res = api.sendMessage(convId, content)
-                val (cleanReply, newAffinity) = extractAffinity(res.assistantMessage.content)
-                if (newAffinity != null && AFFINITY_LABELS.containsKey(newAffinity)) {
-                    affinity = newAffinity
-                }
-                val finalAssistant = res.assistantMessage.copy(
-                    content = cleanReply,
-                    versions = listOf(cleanReply),
-                    versionIndex = 0
+            isSending = true
+            runCatching {
+                api.sendMessage(cid, text)
+            }.onSuccess { resp ->
+                messages = messages.filterNot { it.id == optimistic.id } + listOf(resp.userMessage, resp.assistantMessage)
+            }.onFailure { e ->
+                messages = messages + Message(
+                    id = "err-${System.currentTimeMillis()}",
+                    conversationId = cid,
+                    sender = "assistant",
+                    content = "*${e.message ?: "Ошибка отправки сообщения"}*"
                 )
-                messages = messages.filterNot { it.id == tempUser.id } + listOf(
-                    res.userMessage.copy(versions = listOf(res.userMessage.content), versionIndex = 0),
-                    finalAssistant
-                )
-                onPointsUpdated(res.remaining)
-            } catch (e: Exception) {
-                messages = messages.filterNot { it.id == tempUser.id }
-                input = content
-                error = e.message ?: "Ошибка отправки"
-            } finally {
-                sending = false
             }
+            isSending = false
         }
     }
 
-    Row(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier.width(260.dp).fillMaxHeight().background(MaterialTheme.colorScheme.surface).padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text("Персонажи", fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, modifier = Modifier.padding(8.dp))
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(bots, key = { it.id }) { bot ->
-                    val isSelected = activeBot?.id == bot.id
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
-                        modifier = Modifier.fillMaxWidth().clickable { activeBot = bot }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier.size(36.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(bot.name.take(2).uppercase(), fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                            }
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(bot.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(GENRE_LABELS[bot.genre] ?: bot.genre, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        VerticalDivider(color = MaterialTheme.colorScheme.outline, thickness = 1.dp)
-
-        if (activeBot == null) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Выберите персонажа слева", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        } else {
-            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 14.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column {
-                            Text(activeBot!!.name, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
-                            Text(
-                                "${GENRE_LABELS[activeBot!!.genre] ?: activeBot!!.genre} · Отношение: ${AFFINITY_LABELS[affinity] ?: "Нейтрально"}",
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                        if (remainingPoints != null) {
-                            Surface(
-                                shape = RoundedCornerShape(10.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant
-                            ) {
-                                Text(
-                                    "Баллы: $remainingPoints",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-
-                if (loading) {
-                    Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 24.dp),
-                        contentPadding = PaddingValues(vertical = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(messages, key = { it.id }) { msg ->
-                            val isUser = msg.sender == "user"
-                            val isLatestAssistant = !isUser && messages.lastOrNull()?.id == msg.id
-                            val isLatestUser = isUser && messages.dropLast(1).lastOrNull()?.id == msg.id
-
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(16.dp),
-                                    color = if (isUser) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-                                    modifier = Modifier.widthIn(max = 580.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
-                                        if (editingId == msg.id) {
-                                            OutlinedTextField(
-                                                value = editText,
-                                                onValueChange = { editText = it },
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 8.dp)) {
-                                                Button(
-                                                    onClick = {
-                                                        val convId = conversationId ?: return@Button
-                                                        val updatedText = editText.trim()
-                                                        if (updatedText.isEmpty()) return@Button
-                                                        scope.launch {
-                                                            sending = true
-                                                            try {
-                                                                val res = api.editMessage(convId, msg.id, updatedText)
-                                                                val (cleanReply, level) = extractAffinity(res.assistantMessage.content)
-                                                                if (level != null && AFFINITY_LABELS.containsKey(level)) affinity = level
-                                                                messages = messages.map { m ->
-                                                                    when (m.id) {
-                                                                        res.userMessage.id -> res.userMessage.copy(versions = listOf(res.userMessage.content))
-                                                                        res.assistantMessage.id -> res.assistantMessage.copy(content = cleanReply, versions = listOf(cleanReply))
-                                                                        else -> m
-                                                                    }
-                                                                }
-                                                                onPointsUpdated(res.remaining)
-                                                                editingId = null
-                                                            } catch (e: Exception) {
-                                                                error = e.message
-                                                            } finally {
-                                                                sending = false
-                                                            }
-                                                        }
-                                                    },
-                                                    enabled = !sending
-                                                ) { Text("Сохранить") }
-                                                TextButton(onClick = { editingId = null }) { Text("Отмена") }
-                                            }
-                                        } else {
-                                            FormattedMessageText(
-                                                text = msg.content,
-                                                baseColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.padding(top = 4.dp)
-                                ) {
-                                    if (!isUser && msg.versions.size > 1) {
-                                        TextButton(
-                                            onClick = {
-                                                val prev = (msg.versionIndex - 1).coerceAtLeast(0)
-                                                messages = messages.map {
-                                                    if (it.id == msg.id) it.copy(versionIndex = prev, content = it.versions[prev]) else it
-                                                }
-                                            },
-                                            enabled = msg.versionIndex > 0
-                                        ) { Text("<", fontSize = 11.sp) }
-                                        Text("${msg.versionIndex + 1}/${msg.versions.size}", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        TextButton(
-                                            onClick = {
-                                                val next = (msg.versionIndex + 1).coerceAtMost(msg.versions.lastIndex)
-                                                messages = messages.map {
-                                                    if (it.id == msg.id) it.copy(versionIndex = next, content = it.versions[next]) else it
-                                                }
-                                            },
-                                            enabled = msg.versionIndex < msg.versions.lastIndex
-                                        ) { Text(">", fontSize = 11.sp) }
-                                    }
-
-                                    if (isLatestUser && editingId == null) {
-                                        TextButton(onClick = { editingId = msg.id; editText = msg.content }, enabled = !sending) {
-                                            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(13.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Изменить", fontSize = 11.sp)
-                                        }
-                                    }
-
-                                    if (isLatestAssistant && messages.size > 1) {
-                                        TextButton(
-                                            onClick = {
-                                                val convId = conversationId ?: return@TextButton
-                                                scope.launch {
-                                                    sending = true
-                                                    try {
-                                                        val res = api.regenerateMessage(convId, msg.id)
-                                                        val (cleanReply, level) = extractAffinity(res.assistantMessage.content)
-                                                        if (level != null && AFFINITY_LABELS.containsKey(level)) affinity = level
-                                                        val updatedVersions = (msg.versions.ifEmpty { listOf(msg.content) }) + cleanReply
-                                                        messages = messages.map {
-                                                            if (it.id == msg.id) {
-                                                                it.copy(
-                                                                    content = cleanReply,
-                                                                    versions = updatedVersions,
-                                                                    versionIndex = updatedVersions.lastIndex
-                                                                )
-                                                            } else it
-                                                        }
-                                                        onPointsUpdated(res.remaining)
-                                                    } catch (e: Exception) {
-                                                        error = e.message
-                                                    } finally {
-                                                        sending = false
-                                                    }
-                                                }
-                                            },
-                                            enabled = !sending && (remainingPoints == null || remainingPoints > 0)
-                                        ) {
-                                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(13.dp))
-                                            Spacer(Modifier.width(4.dp))
-                                            Text("Другой ответ", fontSize = 11.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (error != null) {
-                    Text(error!!, color = MaterialTheme.colorScheme.error, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp))
-                }
-
-                Surface(color = MaterialTheme.colorScheme.surface, modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = input,
-                            onValueChange = { input = it },
-                            placeholder = { Text("Сообщение персонажу…") },
-                            enabled = !sending && editingId == null && (remainingPoints == null || remainingPoints > 0),
-                            modifier = Modifier.weight(1f).onPreviewKeyEvent { event ->
-                                if (event.key == Key.Enter && event.type == KeyEventType.KeyDown && !event.isShiftPressed) {
-                                    sendCurrentMessage()
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                        )
-                        Button(
-                            onClick = ::sendCurrentMessage,
-                            enabled = !sending && input.isNotBlank() && editingId == null && (remainingPoints == null || remainingPoints > 0),
-                            modifier = Modifier.height(52.dp)
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = "Отправить")
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun DesktopTavernView(api: IskraApiClient) {
-    var rooms by remember { mutableStateOf<List<ActiveTavernRoom>>(emptyList()) }
-    var activeRoomId by remember { mutableStateOf<String?>(null) }
-    var roomData by remember { mutableStateOf<TavernRoomData?>(null) }
-    var queueStatus by remember { mutableStateOf<String?>(null) }
-    var messageInput by remember { mutableStateOf("") }
-    var loading by remember { mutableStateOf(true) }
-    val scope = rememberCoroutineScope()
-
-    LaunchedEffect(Unit) {
-        try {
-            rooms = api.getActiveTavernRooms()
-        } catch (_: Exception) {}
-        loading = false
+    val bgBrush = if (wallpapersEnabled) {
+        Brush.radialGradient(listOf(IskraColors.surface2, IskraColors.canvas))
+    } else {
+        Brush.verticalGradient(listOf(IskraColors.canvas, IskraColors.canvas))
     }
 
-    LaunchedEffect(activeRoomId) {
-        val roomId = activeRoomId ?: return@LaunchedEffect
-        while (activeRoomId == roomId) {
-            try {
-                roomData = api.getTavernRoom(roomId)
-            } catch (_: Exception) {}
-            delay(3500)
-        }
-    }
-
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(bgBrush)
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(IskraColors.surface)
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
-                Text("Таверна", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-                Text("Совместные ролевые приключения (Duo и Trio)", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button(
-                    onClick = {
-                        scope.launch {
-                            queueStatus = "Поиск собеседника (Duo)…"
-                            try {
-                                val res = api.joinTavernQueue("duo")
-                                if (res.roomId != null) {
-                                    activeRoomId = res.roomId
-                                    queueStatus = null
-                                }
-                            } catch (e: Exception) {
-                                queueStatus = e.message
-                            }
-                        }
-                    }
-                ) { Text("Найти Duo") }
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            queueStatus = "Поиск комнаты с ИИ-мастером (Trio)…"
-                            try {
-                                val res = api.joinTavernQueue("trio")
-                                if (res.roomId != null) {
-                                    activeRoomId = res.roomId
-                                    queueStatus = null
-                                }
-                            } catch (e: Exception) {
-                                queueStatus = e.message
-                            }
-                        }
-                    }
-                ) { Text("Найти Trio") }
-            }
-        }
-
-        if (queueStatus != null) {
-            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(queueStatus!!, fontSize = 13.sp)
-                    TextButton(onClick = { scope.launch { api.leaveTavernQueue(); queueStatus = null } }) {
-                        Text("Отменить")
-                    }
-                }
-            }
-        }
-
-        if (activeRoomId != null && roomData != null) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxSize()
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text("Комната #${activeRoomId!!.take(8)} (${roomData!!.room.mode.uppercase()})", fontWeight = FontWeight.Bold)
-                        TextButton(onClick = { activeRoomId = null; roomData = null }) {
-                            Text("К списку комнат")
-                        }
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    LazyColumn(
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(roomData!!.messages, key = { it.id }) { m ->
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(m.senderName, fontWeight = FontWeight.Bold, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                                    Spacer(Modifier.height(4.dp))
-                                    FormattedMessageText(m.content, MaterialTheme.colorScheme.onSurface)
-                                }
-                            }
-                        }
-                    }
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                            value = messageInput,
-                            onValueChange = { messageInput = it },
-                            placeholder = { Text("Реплика в комнату…") },
-                            modifier = Modifier.weight(1f)
-                        )
-                        Button(
-                            onClick = {
-                                val roomId = activeRoomId ?: return@Button
-                                val txt = messageInput.trim()
-                                if (txt.isEmpty()) return@Button
-                                messageInput = ""
-                                scope.launch {
-                                    try {
-                                        api.sendTavernMessage(roomId, txt)
-                                        roomData = api.getTavernRoom(roomId)
-                                    } catch (_: Exception) {}
-                                }
-                            }
-                        ) { Text("Отправить") }
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(10.dp))
+                        .clickable { onBack() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Назад", tint = IskraColors.text, modifier = Modifier.size(16.dp))
+                }
+
+                Row(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { showBotModal = true }
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    RemoteImage(
+                        url = bot.avatarUrl,
+                        api = api,
+                        modifier = Modifier.size(36.dp).clip(CircleShape),
+                        fallbackText = bot.name
+                    )
+                    Column {
+                        Text(bot.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                        Text("Нажмите, чтобы открыть профиль", fontSize = 11.sp, color = IskraColors.muted)
                     }
                 }
             }
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(rooms, key = { it.id }) { room ->
-                    Card(
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        modifier = Modifier.fillMaxWidth().clickable { activeRoomId = room.id }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(IskraColors.surface2)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(8.dp))
+                        .clickable {
+                            scope.launch {
+                                runCatching {
+                                    val conv = api.createConversation(bot.id)
+                                    conversationId = conv.id
+                                    messages = api.getMessages(conv.id).items
+                                }
+                            }
+                        }
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                ) {
+                    Text("Новый диалог", fontSize = 12.sp, color = IskraColors.text)
+                }
+            }
+        }
+        HorizontalDivider(color = IskraColors.border)
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp),
+            contentPadding = PaddingValues(vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (!bot.description.isNullOrBlank()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(IskraColors.surface)
+                            .border(1.dp, IskraColors.border, RoundedCornerShape(14.dp))
+                            .clickable { showIntro = !showIntro }
+                            .padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column {
-                                Text("${room.partner.displayName} · ${room.mode.uppercase()}", fontWeight = FontWeight.Bold)
-                                Text(
-                                    room.lastMessage?.content ?: "Откройте комнату для продолжения",
-                                    fontSize = 13.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                            Text("О ПЕРСОНАЖЕ", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.subtle)
+                            Text(if (showIntro) "Скрыть" else "Показать", fontSize = 11.sp, color = IskraColors.muted)
+                        }
+                        if (showIntro) {
+                            Text(bot.description, fontSize = 13.sp, color = IskraColors.muted)
+                        }
+                    }
+                }
+            }
+
+            items(messages, key = { it.id }) { msg ->
+                val isUser = msg.sender == "user"
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    if (!isUser) {
+                        RemoteImage(
+                            url = bot.avatarUrl,
+                            api = api,
+                            modifier = Modifier.size(30.dp).clip(CircleShape),
+                            fallbackText = bot.name
+                        )
+                        Spacer(Modifier.width(10.dp))
+                    }
+
+                    Column(
+                        modifier = Modifier.widthIn(max = 640.dp),
+                        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(18.dp))
+                                .background(if (isUser) IskraColors.surface2 else IskraColors.surface)
+                                .border(
+                                    1.dp,
+                                    if (isUser) IskraColors.borderStrong else IskraColors.border,
+                                    RoundedCornerShape(18.dp)
                                 )
-                            }
-                            Button(onClick = { activeRoomId = room.id }) {
-                                Text("Войти")
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = formatMessageRichText(msg.content, IskraColors.text, IskraColors.muted),
+                                fontSize = 14.sp,
+                                lineHeight = 21.sp
+                            )
+                        }
+
+                        if (!isUser) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(
+                                    text = "Копировать",
+                                    fontSize = 11.sp,
+                                    color = IskraColors.subtle,
+                                    modifier = Modifier.clickable {
+                                        clipboard.setText(AnnotatedString(msg.content))
+                                    }
+                                )
+                                val cid = conversationId
+                                if (cid != null && !isSending) {
+                                    Text(
+                                        text = "Перегенерировать",
+                                        fontSize = 11.sp,
+                                        color = IskraColors.subtle,
+                                        modifier = Modifier.clickable {
+                                            scope.launch {
+                                                isSending = true
+                                                runCatching { api.regenerateMessage(cid, msg.id) }
+                                                    .onSuccess { regen ->
+                                                        messages = messages.map {
+                                                            if (it.id == msg.id) regen.assistantMessage else it
+                                                        }
+                                                    }
+                                                isSending = false
+                                            }
+                                        }
+                                    )
+                                }
                             }
                         }
+                    }
+                }
+            }
+
+            if (isSending) {
+                item {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        RemoteImage(
+                            url = bot.avatarUrl,
+                            api = api,
+                            modifier = Modifier.size(30.dp).clip(CircleShape),
+                            fallbackText = bot.name
+                        )
+                        Text("${bot.name} печатает...", fontSize = 13.sp, color = IskraColors.muted, fontStyle = FontStyle.Italic)
+                    }
+                }
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 28.dp, vertical = 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .widthIn(max = 840.dp)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(IskraColors.surface)
+                    .border(1.dp, IskraColors.borderStrong, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(IskraColors.surface2)
+                        .clickable { input = "$input *действие* " }
+                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                ) {
+                    Text("*...*", fontSize = 12.sp, color = IskraColors.muted, fontStyle = FontStyle.Italic)
+                }
+
+                TextField(
+                    value = input,
+                    onValueChange = { input = it },
+                    placeholder = { Text("Написать ${bot.name}...", color = IskraColors.subtle, fontSize = 14.sp) },
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                        focusedTextColor = IskraColors.text,
+                        unfocusedTextColor = IskraColors.text
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(if (input.isNotBlank() && !isSending) IskraColors.accent else IskraColors.surface3)
+                        .clickable(enabled = input.isNotBlank() && !isSending) { sendCurrentMessage() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowUpward,
+                        contentDescription = "Отправить",
+                        tint = if (input.isNotBlank() && !isSending) IskraColors.accentInk else IskraColors.subtle,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showBotModal) {
+        Dialog(onDismissRequest = { showBotModal = false }) {
+            Column(
+                modifier = Modifier
+                    .width(480.dp)
+                    .clip(RoundedCornerShape(22.dp))
+                    .background(IskraColors.surface)
+                    .border(1.dp, IskraColors.borderStrong, RoundedCornerShape(22.dp))
+                    .padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    RemoteImage(
+                        url = bot.avatarUrl,
+                        api = api,
+                        modifier = Modifier.size(64.dp).clip(CircleShape),
+                        fallbackText = bot.name
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(bot.name, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                        Text(genreLabel(bot.genre), fontSize = 12.sp, color = IskraColors.muted)
+                    }
+                    OutlinedButton(
+                        onClick = onToggleLike,
+                        shape = RoundedCornerShape(999.dp),
+                        border = BorderStroke(1.dp, IskraColors.border)
+                    ) {
+                        Text(if (bot.isLiked) "♥ ${bot.likesCount}" else "♡ ${bot.likesCount}", color = IskraColors.text)
+                    }
+                }
+                if (!bot.description.isNullOrBlank()) {
+                    Text(bot.description, fontSize = 13.sp, color = IskraColors.text)
+                }
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = { showBotModal = false }) {
+                        Text("Закрыть", color = IskraColors.text)
                     }
                 }
             }
@@ -1204,136 +2511,779 @@ fun DesktopTavernView(api: IskraApiClient) {
 }
 
 @Composable
-fun DesktopStoriesView(api: IskraApiClient) {
-    var stories by remember { mutableStateOf<List<StorySummary>>(emptyList()) }
-    var loading by remember { mutableStateOf(true) }
+private fun StoryReaderPage(
+    story: StorySummary,
+    api: IskraApiClient,
+    onBack: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var session by remember(story.id) { mutableStateOf<StorySession?>(null) }
+    var messages by remember(story.id) { mutableStateOf<List<StoryMessage>>(emptyList()) }
+    var choices by remember(story.id) { mutableStateOf<List<String>>(emptyList()) }
+    var customAction by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+
+    LaunchedEffect(story.id) {
+        busy = true
+        runCatching {
+            val created = api.createStorySession(story.id)
+            session = created
+            val msgs = api.getStoryMessages(created.id)
+            messages = msgs
+            choices = msgs.lastOrNull()?.metadata?.choices ?: emptyList()
+        }
+        busy = false
+    }
+
+    fun sendChoice(action: String) {
+        val sid = session?.id ?: return
+        if (action.isBlank() || busy) return
+        customAction = ""
+        scope.launch {
+            busy = true
+            runCatching {
+                api.sendStoryMessage(sid, action)
+            }.onSuccess { resp ->
+                messages = messages + listOf(resp.userMessage, resp.assistantMessage)
+                choices = resp.state?.choices ?: resp.assistantMessage.metadata?.choices ?: emptyList()
+            }
+            busy = false
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 36.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            OutlinedButton(
+                onClick = onBack,
+                shape = RoundedCornerShape(999.dp),
+                border = BorderStroke(1.dp, IskraColors.border)
+            ) {
+                Text("← Назад", color = IskraColors.text, fontSize = 13.sp)
+            }
+            Text(story.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+        }
+
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            if (story.description.isNotBlank()) {
+                item {
+                    Text(story.description, fontSize = 14.sp, lineHeight = 22.sp, color = IskraColors.muted)
+                }
+            }
+            items(messages, key = { it.id }) { turn ->
+                Text(
+                    text = formatMessageRichText(turn.content, IskraColors.text, IskraColors.muted),
+                    fontSize = 14.sp,
+                    lineHeight = 22.sp
+                )
+            }
+        }
+
+        if (choices.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                choices.forEach { choice ->
+                    OutlinedButton(
+                        onClick = { sendChoice(choice) },
+                        enabled = !busy,
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, IskraColors.borderStrong)
+                    ) {
+                        Text(choice, fontSize = 13.sp, color = IskraColors.text)
+                    }
+                }
+            }
+        }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            OutlinedTextField(
+                value = customAction,
+                onValueChange = { customAction = it },
+                placeholder = { Text("Ваш ход или решение...", color = IskraColors.subtle) },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.weight(1f)
+            )
+            Button(
+                onClick = { sendChoice(customAction) },
+                enabled = customAction.isNotBlank() && !busy,
+                shape = RoundedCornerShape(999.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = IskraColors.accent,
+                    contentColor = IskraColors.accentInk
+                )
+            ) {
+                Text(if (busy) "..." else "Продолжить")
+            }
+        }
+    }
+}
+
+@Composable
+private fun TavernPage(
+    api: IskraApiClient,
+    bots: List<ApiBot>,
+    onOpenBotChat: (ApiBot) -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var activeRooms by remember { mutableStateOf<List<ActiveTavernRoom>>(emptyList()) }
+    var currentRoom by remember { mutableStateOf<TavernRoomData?>(null) }
+    var queueStatus by remember { mutableStateOf<String?>(null) }
+    var msgInput by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        try {
-            stories = api.getStories()
-        } catch (_: Exception) {}
-        loading = false
+        activeRooms = runCatching { api.getActiveTavernRooms() }.getOrDefault(emptyList())
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Интерактивные истории", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
-        if (loading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(minSize = 300.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                horizontalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                items(stories, key = { it.id }) { story ->
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                    ) {
-                        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(story.title, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp)
-                            if (story.subtitle.isNotBlank()) {
-                                Text(story.subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                            }
-                            Text(story.description, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 4)
+    fun startQueue(mode: String) {
+        scope.launch {
+            queueStatus = "Поиск собеседников ($mode)..."
+            runCatching {
+                val res = api.joinTavernQueue(mode)
+                if (res.roomId != null) {
+                    currentRoom = api.getTavernRoom(res.roomId)
+                    queueStatus = null
+                } else if (res.queueId != null) {
+                    repeat(8) {
+                        delay(2000)
+                        val poll = api.checkTavernQueue(res.queueId)
+                        if (poll.roomId != null) {
+                            currentRoom = api.getTavernRoom(poll.roomId)
+                            queueStatus = null
+                            return@runCatching
                         }
                     }
+                    queueStatus = "Пока никого нет в очереди. Попробуйте случайного персонажа."
                 }
+            }.onFailure {
+                queueStatus = null
+                val randomBot = bots.randomOrNull()
+                if (randomBot != null) onOpenBotChat(randomBot)
+            }
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 36.dp, vertical = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("РОЛЕВАЯ КОМНАТА", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.subtle)
+            Text("Таверна", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+            Text("Не знаешь с кем пообщаться? Выбери случайного собеседника, дуэт или трио.", fontSize = 14.sp, color = IskraColors.muted)
+        }
+
+        if (queueStatus != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(IskraColors.surface)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(14.dp))
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(queueStatus!!, fontSize = 13.sp, color = IskraColors.text)
+                TextButton(onClick = {
+                    scope.launch { api.leaveTavernQueue() }
+                    queueStatus = null
+                }) {
+                    Text("Отмена", color = IskraColors.muted)
+                }
+            }
+        }
+
+        val room = currentRoom
+        if (room != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(IskraColors.surface)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Комната #${room.room.id.take(6)} (${room.room.mode})", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    TextButton(onClick = { currentRoom = null }) { Text("Выйти", color = IskraColors.muted) }
+                }
+                room.messages.forEach { m ->
+                    Text("${m.senderName}: ${m.content}", fontSize = 13.sp, color = IskraColors.text)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = msgInput,
+                        onValueChange = { msgInput = it },
+                        placeholder = { Text("Сообщение в комнату...") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Button(
+                        onClick = {
+                            val text = msgInput.trim()
+                            if (text.isNotBlank()) {
+                                msgInput = ""
+                                scope.launch {
+                                    runCatching {
+                                        api.sendTavernMessage(room.room.id, text)
+                                        currentRoom = api.getTavernRoom(room.room.id)
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Отправить")
+                    }
+                }
+            }
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                TavernModeCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Случайный бот",
+                    subtitle = "Мгновенный переход к диалогу со случайным героем из каталога.",
+                    actionLabel = "Начать диалог →",
+                    onClick = {
+                        val randomBot = bots.randomOrNull()
+                        if (randomBot != null) onOpenBotChat(randomBot)
+                    }
+                )
+                TavernModeCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Дуэт",
+                    subtitle = "Совместная ролевая комната для двоих участников.",
+                    actionLabel = "Найти пару →",
+                    onClick = { startQueue("duo") }
+                )
+                TavernModeCard(
+                    modifier = Modifier.weight(1f),
+                    title = "Трио с ботом",
+                    subtitle = "Два игрока и ведущий ИИ-персонаж в одной сцене.",
+                    actionLabel = "Найти комнату →",
+                    onClick = { startQueue("trio") }
+                )
             }
         }
     }
 }
 
 @Composable
-fun DesktopSettingsView(
-    profile: UserProfile?,
-    points: Points?,
-    themeMode: String,
-    paletteId: String,
-    onThemeModeChange: (String) -> Unit,
-    onPaletteChange: (String) -> Unit,
-    onLogout: () -> Unit
+private fun TavernModeCard(
+    modifier: Modifier,
+    title: String,
+    subtitle: String,
+    actionLabel: String,
+    onClick: () -> Unit
 ) {
     Column(
-        modifier = Modifier.fillMaxSize().padding(28.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(IskraColors.surface)
+            .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Профиль и настройки", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold)
+        Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+        Text(subtitle, fontSize = 13.sp, color = IskraColors.muted)
+        Spacer(Modifier.height(4.dp))
+        Text(actionLabel, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
+    }
+}
 
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()
+@Composable
+private fun AuthPage(
+    api: IskraApiClient,
+    onAuthenticated: () -> Unit,
+    onContinueGuest: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    var mode by remember { mutableStateOf("login") }
+    var name by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var otpCode by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+    var acceptTerms by remember { mutableStateOf(true) }
+    var newsletter by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var errorMsg by remember { mutableStateOf<String?>(null) }
+    var infoMsg by remember { mutableStateOf<String?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(IskraColors.canvas)
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                .width(420.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(IskraColors.surface)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(22.dp))
+                .padding(horizontal = 32.dp, vertical = 34.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(profile?.displayName?.ifBlank { "Пользователь IskraAi" } ?: "Пользователь IskraAi", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                Text(profile?.email ?: "", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                        Text(
-                            "Тариф: ${(profile?.tier ?: "free").uppercase()}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                    Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-                        Text(
-                            "Баллы: ${points?.remaining ?: profile?.points?.remaining ?: 0}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                BrandMark(size = 64.dp)
+                Text(
+                    text = "IskraAi",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = IskraColors.text
+                )
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = when (mode) {
+                        "register" -> "Создай аккаунт"
+                        "verify" -> "Подтверждение почты"
+                        "forgot" -> "Сброс пароля"
+                        "reset" -> "Новый пароль"
+                        else -> "С возвращением"
+                    },
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = IskraColors.text
+                )
+                Text(
+                    text = when (mode) {
+                        "register" -> "Истории и персонажи ждут тебя"
+                        "verify" -> "Мы отправили 6-значный код на $email"
+                        "forgot" -> "Отправим код для восстановления доступа"
+                        "reset" -> "Введите код из письма и новый пароль"
+                        else -> "Продолжи свои истории"
+                    },
+                    fontSize = 13.sp,
+                    color = IskraColors.muted,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            if (mode == "login" || mode == "register") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(IskraColors.surface2)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                        .padding(4.dp)
+                ) {
+                    listOf("register" to "Регистрация", "login" to "Вход").forEach { (tabMode, label) ->
+                        val active = mode == tabMode
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (active) IskraColors.text else Color.Transparent)
+                                .clickable {
+                                    mode = tabMode
+                                    errorMsg = null
+                                    infoMsg = null
+                                }
+                                .padding(vertical = 9.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (active) IskraColors.canvas else IskraColors.muted
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Оформление", fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    FilterChip(
-                        selected = themeMode == "dark",
-                        onClick = { onThemeModeChange("dark") },
-                        label = { Text("Тёмная тема") }
+            if (errorMsg != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0x1FF87171))
+                        .border(1.dp, Color(0x4DF87171), RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(errorMsg!!, color = IskraColors.danger, fontSize = 13.sp)
+                }
+            }
+
+            if (infoMsg != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(IskraColors.surface2)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                        .padding(12.dp)
+                ) {
+                    Text(infoMsg!!, color = IskraColors.text, fontSize = 13.sp)
+                }
+            }
+
+            when (mode) {
+                "register" -> {
+                    IskraField(value = name, onValueChange = { name = it }, label = "Имя или псевдоним", placeholder = "Как к тебе обращаться")
+                    IskraField(value = email, onValueChange = { email = it }, label = "Электронная почта", placeholder = "you@example.com")
+                    IskraPasswordField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = "Пароль",
+                        placeholder = "Минимум 8 символов",
+                        visible = showPassword,
+                        onToggleVisible = { showPassword = !showPassword }
                     )
-                    FilterChip(
-                        selected = themeMode == "light",
-                        onClick = { onThemeModeChange("light") },
-                        label = { Text("Светлая тема") }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(checked = acceptTerms, onCheckedChange = { acceptTerms = it })
+                        Text(
+                            text = "Мне исполнилось 18 лет, и я принимаю условия использования",
+                            fontSize = 12.sp,
+                            color = IskraColors.muted
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (email.isBlank() || password.length < 6) {
+                                errorMsg = "Введите корректный email и пароль"
+                                return@Button
+                            }
+                            if (!acceptTerms) {
+                                errorMsg = "Необходимо подтвердить возраст и принять условия"
+                                return@Button
+                            }
+                            scope.launch {
+                                busy = true
+                                errorMsg = null
+                                runCatching {
+                                    api.requestOtp(
+                                        email = email.trim(),
+                                        displayName = name.trim().ifBlank { email.substringBefore("@") },
+                                        password = password,
+                                        newsletter = newsletter
+                                    )
+                                }.onSuccess {
+                                    mode = "verify"
+                                }.onFailure { e ->
+                                    errorMsg = e.message ?: "Ошибка отправки кода"
+                                }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = IskraColors.accent,
+                            contentColor = IskraColors.accentInk
+                        )
+                    ) {
+                        Text(if (busy) "Отправка..." else "Получить код подтверждения", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                "login" -> {
+                    IskraField(value = email, onValueChange = { email = it }, label = "Электронная почта", placeholder = "you@example.com")
+                    IskraPasswordField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = "Пароль",
+                        placeholder = "Ваш пароль",
+                        visible = showPassword,
+                        onToggleVisible = { showPassword = !showPassword }
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text(
+                            text = "Забыли пароль?",
+                            fontSize = 12.sp,
+                            color = IskraColors.muted,
+                            modifier = Modifier.clickable {
+                                mode = "forgot"
+                                errorMsg = null
+                            }
+                        )
+                    }
+
+                    Button(
+                        onClick = {
+                            if (email.isBlank() || password.isBlank()) {
+                                errorMsg = "Введите почту и пароль"
+                                return@Button
+                            }
+                            scope.launch {
+                                busy = true
+                                errorMsg = null
+                                runCatching {
+                                    api.login(email = email.trim(), password = password)
+                                }.onSuccess {
+                                    onAuthenticated()
+                                }.onFailure { e ->
+                                    errorMsg = e.message ?: "Ошибка входа"
+                                }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = IskraColors.accent,
+                            contentColor = IskraColors.accentInk
+                        )
+                    ) {
+                        Text(if (busy) "Вход..." else "Войти", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+
+                "verify" -> {
+                    IskraField(
+                        value = otpCode,
+                        onValueChange = { otpCode = it.filter { ch -> ch.isDigit() }.take(6) },
+                        label = "6-значный код из письма",
+                        placeholder = "000000"
+                    )
+
+                    Button(
+                        onClick = {
+                            if (otpCode.length < 6) {
+                                errorMsg = "Введите 6-значный код"
+                                return@Button
+                            }
+                            scope.launch {
+                                busy = true
+                                errorMsg = null
+                                runCatching {
+                                    api.verifyOtp(email = email.trim(), code = otpCode.trim())
+                                }.onSuccess {
+                                    onAuthenticated()
+                                }.onFailure { e ->
+                                    errorMsg = e.message ?: "Неверный код подтверждения"
+                                }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = IskraColors.accent,
+                            contentColor = IskraColors.accentInk
+                        )
+                    ) {
+                        Text(if (busy) "Проверка..." else "Подтвердить и войти", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+
+                    Text(
+                        text = "Назад",
+                        fontSize = 12.sp,
+                        color = IskraColors.muted,
+                        modifier = Modifier.clickable { mode = "register" }
                     )
                 }
 
-                Text("Акцентная палитра", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    ISKRA_PALETTES.forEach { p ->
-                        FilterChip(
-                            selected = paletteId == p.id,
-                            onClick = { onPaletteChange(p.id) },
-                            leadingIcon = {
-                                Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(p.darkAccent))
-                            },
-                            label = { Text(p.label, fontSize = 12.sp) }
+                "forgot" -> {
+                    IskraField(value = email, onValueChange = { email = it }, label = "Электронная почта", placeholder = "you@example.com")
+                    Button(
+                        onClick = {
+                            if (email.isBlank()) {
+                                errorMsg = "Укажите адрес почты"
+                                return@Button
+                            }
+                            scope.launch {
+                                busy = true
+                                errorMsg = null
+                                runCatching { api.requestPasswordReset(email.trim()) }
+                                    .onSuccess {
+                                        mode = "reset"
+                                        infoMsg = "Код восстановления отправлен на почту"
+                                    }
+                                    .onFailure { e -> errorMsg = e.message ?: "Ошибка отправки кода" }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = IskraColors.accent,
+                            contentColor = IskraColors.accentInk
                         )
+                    ) {
+                        Text(if (busy) "Отправка..." else "Отправить код", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    Text(
+                        text = "Вернуться ко входу",
+                        fontSize = 12.sp,
+                        color = IskraColors.muted,
+                        modifier = Modifier.clickable { mode = "login" }
+                    )
+                }
+
+                "reset" -> {
+                    IskraField(value = otpCode, onValueChange = { otpCode = it.take(6) }, label = "Код из письма", placeholder = "000000")
+                    IskraPasswordField(
+                        value = newPassword,
+                        onValueChange = { newPassword = it },
+                        label = "Новый пароль",
+                        placeholder = "Минимум 8 символов",
+                        visible = showPassword,
+                        onToggleVisible = { showPassword = !showPassword }
+                    )
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                busy = true
+                                errorMsg = null
+                                runCatching {
+                                    api.resetPassword(email.trim(), otpCode.trim(), newPassword)
+                                }.onSuccess {
+                                    onAuthenticated()
+                                }.onFailure { e ->
+                                    errorMsg = e.message ?: "Не удалось сбросить пароль"
+                                }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy,
+                        modifier = Modifier.fillMaxWidth().height(46.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = IskraColors.accent,
+                            contentColor = IskraColors.accentInk
+                        )
+                    ) {
+                        Text(if (busy) "Сохранение..." else "Сохранить пароль", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
-        }
 
-        OutlinedButton(
-            onClick = onLogout,
-            modifier = Modifier.width(220.dp)
-        ) {
-            Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Выйти из аккаунта")
+            Text(
+                text = "Открыть каталог без входа →",
+                fontSize = 12.sp,
+                color = IskraColors.subtle,
+                modifier = Modifier.clickable { onContinueGuest() }
+            )
         }
+    }
+}
+
+@Composable
+private fun IskraField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String,
+    minLines: Int = 1
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = IskraColors.muted)
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = IskraColors.subtle, fontSize = 13.sp) },
+            singleLine = minLines == 1,
+            minLines = minLines,
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = IskraColors.surface2,
+                unfocusedContainerColor = IskraColors.surface2,
+                focusedBorderColor = IskraColors.borderStrong,
+                unfocusedBorderColor = IskraColors.border,
+                focusedTextColor = IskraColors.text,
+                unfocusedTextColor = IskraColors.text
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@Composable
+private fun IskraPasswordField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    placeholder: String,
+    visible: Boolean,
+    onToggleVisible: () -> Unit
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = IskraColors.muted)
+        OutlinedTextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder, color = IskraColors.subtle, fontSize = 13.sp) },
+            singleLine = true,
+            visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                Text(
+                    text = if (visible) "Скрыть" else "Показать",
+                    fontSize = 11.sp,
+                    color = IskraColors.muted,
+                    modifier = Modifier.clickable { onToggleVisible() }.padding(horizontal = 8.dp)
+                )
+            },
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = IskraColors.surface2,
+                unfocusedContainerColor = IskraColors.surface2,
+                focusedBorderColor = IskraColors.borderStrong,
+                unfocusedBorderColor = IskraColors.border,
+                focusedTextColor = IskraColors.text,
+                unfocusedTextColor = IskraColors.text
+            ),
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }

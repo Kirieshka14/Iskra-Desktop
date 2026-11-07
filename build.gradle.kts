@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "ai.iskra"
-version = "0.8.0"
+version = "0.8.1"
 
 kotlin {
     jvmToolchain(17)
@@ -24,7 +24,7 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
                 implementation("io.ktor:ktor-client-core:2.3.12")
-                implementation("io.ktor:ktor-client-cio:2.3.12")
+                implementation("io.ktor:ktor-client-okhttp:2.3.12")
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.12")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.12")
             }
@@ -37,9 +37,10 @@ compose.desktop {
         mainClass = "ai.iskra.desktop.MainKt"
 
         nativeDistributions {
+            includeAllModules = true
             targetFormats(TargetFormat.Deb, TargetFormat.Msi, TargetFormat.Exe, TargetFormat.Dmg)
             packageName = "iskra"
-            packageVersion = "1.8.0"
+            packageVersion = "1.8.1"
             description = "IskraAi Desktop Client"
             vendor = "IskraAi"
 

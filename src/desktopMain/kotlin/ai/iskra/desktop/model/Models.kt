@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ClientConfig(
     val clientName: String = "Iskra Desktop Client",
-    val clientVersion: String = "1.0.0",
+    val clientVersion: String = "0.8.1",
     val targetPlatform: String = "desktop",
     val apiUrl: String = "https://bacand-iskra.onrender.com",
     val clientKey: String = ""
@@ -19,7 +19,8 @@ data class StoredSession(
     val userId: String? = null,
     val email: String? = null,
     val themeMode: String = "dark",
-    val paletteId: String = "classic"
+    val paletteId: String = "classic",
+    val wallpapersEnabled: Boolean = false
 )
 
 @Serializable
@@ -61,7 +62,7 @@ data class LoginRequest(
 data class OtpRequest(
     val email: String,
     val purpose: String = "register",
-    val captchaToken: String = "iskra-native-client",
+    val captchaToken: String = "cf-turnstile-mobile-pass",
     val displayName: String? = null,
     val password: String? = null,
     val isAdultConfirmed: Boolean = true,
@@ -79,7 +80,7 @@ data class OtpVerifyRequest(
 @Serializable
 data class PasswordResetRequest(
     val email: String,
-    val captchaToken: String = "iskra-native-client"
+    val captchaToken: String = "cf-turnstile-mobile-pass"
 )
 
 @Serializable
@@ -114,6 +115,19 @@ data class ApiBot(
 )
 
 @Serializable
+data class CreateBotRequest(
+    val name: String,
+    val genre: String,
+    val description: String,
+    val systemPrompt: String,
+    val avatarUrl: String? = null,
+    val initialAffinity: String = "neutral",
+    val affinityReason: String? = null,
+    val wallpaperUrl: String? = null,
+    val wallpaperPcUrl: String? = null
+)
+
+@Serializable
 data class LikeToggleResponse(
     val botId: String,
     val isLiked: Boolean,
@@ -138,6 +152,13 @@ data class UserProfile(
     val plan: String = "Free",
     val points: Points = Points(),
     val enhancedMemory: Boolean = false
+)
+
+@Serializable
+data class UpdateProfileRequest(
+    val displayName: String? = null,
+    val enhancedMemory: Boolean? = null,
+    val avatarUrl: String? = null
 )
 
 @Serializable
@@ -218,6 +239,45 @@ data class StorySummary(
     val genre: String = "other",
     val mode: String = "limited",
     @SerialName("likes_count") val likesCount: Int = 0
+)
+
+@Serializable
+data class StorySession(
+    val id: String,
+    @SerialName("story_id") val storyId: String = "",
+    val status: String = "active"
+)
+
+@Serializable
+data class StoryMetadata(
+    val sceneLabel: String? = null,
+    val choices: List<String> = emptyList(),
+    val ended: Boolean = false
+)
+
+@Serializable
+data class StoryMessage(
+    val id: String,
+    val sender: String = "assistant",
+    val content: String = "",
+    val metadata: StoryMetadata? = null
+)
+
+@Serializable
+data class SendStoryMessageRequest(
+    val sessionId: String,
+    val content: String,
+    val responseSize: String = "small",
+    val operationKey: String,
+    val showChoices: Boolean = true
+)
+
+@Serializable
+data class SendStoryMessageResponse(
+    val userMessage: StoryMessage,
+    val assistantMessage: StoryMessage,
+    val remaining: Int = 0,
+    val state: StoryMetadata? = null
 )
 
 @Serializable

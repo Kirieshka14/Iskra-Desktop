@@ -2,13 +2,14 @@ package ai.iskra.desktop.network
 
 import ai.iskra.desktop.model.*
 import io.ktor.client.*
-import io.ktor.client.engine.cio.*
+import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
 import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.KSerializer
@@ -17,6 +18,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.serializer
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 class IskraApiException(
     val status: Int,
@@ -35,19 +38,28 @@ class IskraApiClient {
     private val configFile = File("iskra.config.json")
     private val sessionFile = File(System.getProperty("user.home"), ".config/iskra-desktop/session.json")
     private val refreshMutex = Mutex()
+    private val imageCache = ConcurrentHashMap<String, ByteArray>()
 
     val baseUrl: String = loadBaseUrl()
     var session: StoredSession? = loadSession()
         private set
 
-    private val http = HttpClient(CIO) {
+    private val http = HttpClient(OkHttp) {
+        engine {
+            config {
+                connectTimeout(25, TimeUnit.SECONDS)
+                readTimeout(65, TimeUnit.SECONDS)
+                writeTimeout(65, TimeUnit.SECONDS)
+                retryOnConnectionFailure(true)
+            }
+        }
         install(ContentNegotiation) {
             json(this@IskraApiClient.json)
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = 60_000
-            connectTimeoutMillis = 20_000
-            socketTimeoutMillis = 60_000
+            requestTimeoutMillis = 65_000
+            connectTimeoutMillis = 25_000
+            socketTimeoutMillis = 65_000
         }
     }
 
@@ -67,13 +79,14 @@ class IskraApiClient {
     private fun loadSession(): StoredSession? {
         return try {
             if (sessionFile.exists()) {
-                val s = json.decodeFromString(StoredSession.serializer(), sessionFile.readText())
-                if (s.accessToken.isNotBlank()) s else null
+                json.decodeFromString(StoredSession.serializer(), sessionFile.readText())
             } else null
         } catch (_: Exception) {
             null
         }
     }
+
+    fun hasValidToken(): Boolean = !session?.accessToken.isNullOrBlank()
 
     fun saveSession(next: StoredSession?) {
         session = next
@@ -87,9 +100,78 @@ class IskraApiClient {
         } catch (_: Exception) {}
     }
 
-    fun updateThemePreferences(themeMode: String, paletteId: String) {
-        val current = session ?: StoredSession(accessToken = "", themeMode = themeMode, paletteId = paletteId)
-        saveSession(current.copy(themeMode = themeMode, paletteId = paletteId))
+    fun updateThemePreferences(
+        themeMode: String = session?.themeMode ?: "dark",
+        paletteId: String = session?.paletteId ?: "classic",
+        wallpapersEnabled: Boolean = session?.wallpapersEnabled ?: false
+    ) {
+        val current = session ?: StoredSession(
+            accessToken = "",
+            themeMode = themeMode,
+            paletteId = paletteId,
+            wallpapersEnabled = wallpapersEnabled
+        )
+        saveSession(
+            current.copy(
+                themeMode = themeMode,
+                paletteId = paletteId,
+                wallpapersEnabled = wallpapersEnabled
+            )
+        )
+    }
+
+    suspend fun warmBackend() {
+        try {
+            http.get("$baseUrl/api/capabilities") {
+                header(HttpHeaders.Origin, "https://iskraai.pages.dev")
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun fetchImageBytes(url: String): ByteArray? {
+        if (url.isBlank()) return null
+        val resolved = if (url.startsWith("/")) "$baseUrl$url" else url
+        imageCache[resolved]?.let { return it }
+        return try {
+            val response = http.get(resolved)
+            if (response.status.isSuccess()) {
+                val bytes = response.readBytes()
+                if (bytes.isNotEmpty()) {
+                    imageCache[resolved] = bytes
+                    bytes
+                } else null
+            } else null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private suspend fun <T> withRetry(retries: Int = 2, block: suspend () -> T): T {
+        var lastError: Throwable? = null
+        for (attempt in 0..retries) {
+            try {
+                return block()
+            } catch (e: IskraApiException) {
+                if (e.status in 502..504 && attempt < retries) {
+                    lastError = e
+                    delay(2500)
+                    continue
+                }
+                throw e
+            } catch (e: Throwable) {
+                lastError = e
+                if (attempt < retries) {
+                    delay(2500)
+                } else {
+                    throw IskraApiException(
+                        status = 503,
+                        code = "NETWORK_ERROR",
+                        message = "Сервер просыпается или недоступен. Попробуйте ещё раз через пару секунд."
+                    )
+                }
+            }
+        }
+        throw lastError ?: IskraApiException(500, "UNKNOWN", "Ошибка соединения")
     }
 
     private suspend fun <T> executeRaw(
@@ -103,6 +185,8 @@ class IskraApiClient {
         val response: HttpResponse = http.request(url) {
             this.method = method
             header(HttpHeaders.Accept, ContentType.Application.Json)
+            header(HttpHeaders.Origin, "https://iskraai.pages.dev")
+            header(HttpHeaders.UserAgent, "IskraDesktop/0.8.1")
             val token = session?.accessToken
             if (!token.isNullOrBlank()) {
                 header(HttpHeaders.Authorization, "Bearer $token")
@@ -144,9 +228,11 @@ class IskraApiClient {
         responseSerializer: KSerializer<T>
     ): T {
         return try {
-            executeRaw(path, method, bodyObj, bodySerializer, responseSerializer)
+            withRetry {
+                executeRaw(path, method, bodyObj, bodySerializer, responseSerializer)
+            }
         } catch (e: IskraApiException) {
-            if (e.status == 401 && session?.accessToken?.isNotBlank() == true && !path.startsWith("/api/auth/")) {
+            if (e.status == 401 && hasValidToken() && !path.startsWith("/api/auth/")) {
                 if (refreshSession()) {
                     return executeRaw(path, method, bodyObj, bodySerializer, responseSerializer)
                 }
@@ -178,7 +264,9 @@ class IskraApiClient {
             )
             true
         } catch (e: IskraApiException) {
-            if (e.status == 401) saveSession(null)
+            if (e.status == 401) {
+                saveSession(current.copy(accessToken = "", refreshToken = null))
+            }
             false
         } catch (_: Exception) {
             false
@@ -202,7 +290,8 @@ class IskraApiClient {
                     userId = res.user.id,
                     email = res.user.email,
                     themeMode = session?.themeMode ?: "dark",
-                    paletteId = session?.paletteId ?: "classic"
+                    paletteId = session?.paletteId ?: "classic",
+                    wallpapersEnabled = session?.wallpapersEnabled ?: false
                 )
             )
         }
@@ -242,7 +331,8 @@ class IskraApiClient {
                     userId = res.user.id,
                     email = res.user.email,
                     themeMode = session?.themeMode ?: "dark",
-                    paletteId = session?.paletteId ?: "classic"
+                    paletteId = session?.paletteId ?: "classic",
+                    wallpapersEnabled = session?.wallpapersEnabled ?: false
                 )
             )
         }
@@ -277,7 +367,8 @@ class IskraApiClient {
                     userId = res.user.id,
                     email = res.user.email,
                     themeMode = session?.themeMode ?: "dark",
-                    paletteId = session?.paletteId ?: "classic"
+                    paletteId = session?.paletteId ?: "classic",
+                    wallpapersEnabled = session?.wallpapersEnabled ?: false
                 )
             )
         }
@@ -295,17 +386,67 @@ class IskraApiClient {
                 responseSerializer = JsonObject.serializer()
             )
         } catch (_: Exception) {}
-        saveSession(null)
+        val cur = session
+        saveSession(
+            if (cur != null) cur.copy(accessToken = "", refreshToken = null, userId = null, email = null)
+            else null
+        )
     }
 
     suspend fun getBots(): List<ApiBot> =
         request("/api/bots", responseSerializer = serializer())
+
+    suspend fun getMyBots(): List<ApiBot> =
+        request("/api/bots/mine", responseSerializer = serializer())
+
+    suspend fun getBot(botId: String): ApiBot =
+        request("/api/bots/$botId", responseSerializer = ApiBot.serializer())
+
+    @Suppress("UNCHECKED_CAST")
+    suspend fun createBot(req: CreateBotRequest): ApiBot =
+        request(
+            path = "/api/bots",
+            method = HttpMethod.Post,
+            bodyObj = req,
+            bodySerializer = CreateBotRequest.serializer() as KSerializer<Any>,
+            responseSerializer = ApiBot.serializer()
+        )
+
+    @Suppress("UNCHECKED_CAST")
+    suspend fun updateBot(botId: String, req: CreateBotRequest): ApiBot =
+        request(
+            path = "/api/bots/$botId",
+            method = HttpMethod.Patch,
+            bodyObj = req,
+            bodySerializer = CreateBotRequest.serializer() as KSerializer<Any>,
+            responseSerializer = ApiBot.serializer()
+        )
+
+    suspend fun deleteBot(botId: String) {
+        request("/api/bots/$botId", method = HttpMethod.Delete, responseSerializer = JsonObject.serializer())
+    }
 
     suspend fun toggleBotLike(botId: String): LikeToggleResponse =
         request("/api/bots/$botId/like", method = HttpMethod.Post, responseSerializer = LikeToggleResponse.serializer())
 
     suspend fun getProfile(): UserProfile =
         request("/api/profile", responseSerializer = UserProfile.serializer())
+
+    @Suppress("UNCHECKED_CAST")
+    suspend fun updateProfile(displayName: String? = null, enhancedMemory: Boolean? = null, avatarUrl: String? = null) {
+        request(
+            path = "/api/profile",
+            method = HttpMethod.Patch,
+            bodyObj = UpdateProfileRequest(displayName, enhancedMemory, avatarUrl),
+            bodySerializer = UpdateProfileRequest.serializer() as KSerializer<Any>,
+            responseSerializer = JsonObject.serializer()
+        )
+    }
+
+    suspend fun deleteAccount() {
+        request("/api/profile", method = HttpMethod.Delete, responseSerializer = JsonObject.serializer())
+        logout()
+    }
 
     suspend fun getPoints(): Points =
         request("/api/points", responseSerializer = Points.serializer())
@@ -362,6 +503,30 @@ class IskraApiClient {
 
     suspend fun getStories(): List<StorySummary> =
         request("/api/stories", responseSerializer = serializer())
+
+    suspend fun getMyStories(): List<StorySummary> =
+        request("/api/stories/mine", responseSerializer = serializer())
+
+    suspend fun createStorySession(storyId: String): StorySession =
+        request("/api/stories/$storyId/sessions", method = HttpMethod.Post, responseSerializer = StorySession.serializer())
+
+    suspend fun getStoryMessages(sessionId: String): List<StoryMessage> =
+        request("/api/story-sessions/$sessionId/messages", responseSerializer = serializer())
+
+    @Suppress("UNCHECKED_CAST")
+    suspend fun sendStoryMessage(sessionId: String, content: String, showChoices: Boolean = true): SendStoryMessageResponse =
+        request(
+            path = "/api/story-sessions/$sessionId/messages",
+            method = HttpMethod.Post,
+            bodyObj = SendStoryMessageRequest(
+                sessionId = sessionId,
+                content = content,
+                operationKey = UUID.randomUUID().toString(),
+                showChoices = showChoices
+            ),
+            bodySerializer = SendStoryMessageRequest.serializer() as KSerializer<Any>,
+            responseSerializer = SendStoryMessageResponse.serializer()
+        )
 
     suspend fun getActiveTavernRooms(): List<ActiveTavernRoom> =
         request("/api/tavern/rooms/active", responseSerializer = ActiveTavernRoomsResponse.serializer()).rooms
