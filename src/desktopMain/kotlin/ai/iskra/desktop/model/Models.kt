@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class ClientConfig(
     val clientName: String = "Iskra Desktop Client",
-    val clientVersion: String = "0.8.1.1",
+    val clientVersion: String = "0.8.2",
     val targetPlatform: String = "desktop",
     val apiUrl: String = "https://bacand-iskra.onrender.com",
     val clientKey: String = ""
@@ -20,7 +20,9 @@ data class StoredSession(
     val email: String? = null,
     val themeMode: String = "dark",
     val paletteId: String = "classic",
-    val wallpapersEnabled: Boolean = false
+    val wallpapersEnabled: Boolean = false,
+    val clientKey: String = "",
+    val cachedAvatarUrl: String? = null
 )
 
 @Serializable
@@ -149,10 +151,14 @@ data class UserProfile(
     val role: String? = null,
     val tier: String = "free",
     val avatarUrl: String? = null,
+    @SerialName("avatar_url") val rawAvatarUrl: String? = null,
     val plan: String = "Free",
     val points: Points = Points(),
     val enhancedMemory: Boolean = false
-)
+) {
+    val effectiveAvatarUrl: String?
+        get() = avatarUrl?.takeIf { it.isNotBlank() } ?: rawAvatarUrl?.takeIf { it.isNotBlank() }
+}
 
 @Serializable
 data class UpdateProfileRequest(
@@ -357,3 +363,46 @@ data class SendTavernMessageResponse(
     val message: TavernMessage? = null,
     val botMessage: TavernMessage? = null
 )
+
+@Serializable
+data class ClientAppItem(
+    val id: String,
+    @SerialName("user_id") val userId: String = "",
+    @SerialName("owner_id") val ownerId: String = "",
+    @SerialName("app_name") val appName: String = "Клиентский мод",
+    val platform: String = "desktop",
+    @SerialName("key_prefix") val keyPrefix: String = "",
+    val status: String = "active",
+    @SerialName("is_official") val isOfficial: Boolean = false,
+    @SerialName("is_revoked") val isRevoked: Boolean = false,
+    @SerialName("requests_count") val requestsCount: Long = 0,
+    @SerialName("last_used_at") val lastUsedAt: String? = null,
+    @SerialName("created_at") val createdAt: String = ""
+)
+
+typealias ClientApp = ClientAppItem
+
+@Serializable
+data class DeveloperKeysResponse(
+    val apps: List<ClientAppItem> = emptyList(),
+    val tier: String = "free",
+    val maxKeys: Int = 3
+)
+
+@Serializable
+data class CreateDeveloperKeyRequest(
+    val appName: String,
+    val platform: String
+)
+
+@Serializable
+data class CreateDeveloperKeyResponse(
+    val app: ClientAppItem,
+    val rawKey: String
+)
+
+@Serializable
+data class AvatarUploadResponse(
+    val url: String = ""
+)
+

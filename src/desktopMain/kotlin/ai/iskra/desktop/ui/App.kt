@@ -40,9 +40,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import java.awt.Desktop
+import java.awt.FileDialog
+import java.awt.Frame
+import java.io.File
 import java.net.URI
+import javax.swing.JFileChooser
+import javax.swing.filechooser.FileNameExtensionFilter
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Image as SkiaImage
 
 enum class DesktopRoute {
@@ -63,6 +70,36 @@ val GENRE_LABELS: List<Pair<String, String>> = listOf(
 
 fun genreLabel(key: String): String =
     GENRE_LABELS.firstOrNull { it.first == key }?.second ?: key
+
+fun initialsFromName(raw: String): String {
+    val parts = raw.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+    if (parts.isEmpty()) return "✦"
+    if (parts.size >= 2) {
+        return "${parts[0].first()}${parts[1].first()}".uppercase()
+    }
+    return parts[0].take(2).uppercase()
+}
+
+suspend fun pickImageFile(): File? = withContext(Dispatchers.IO) {
+    runCatching {
+        val dialog = FileDialog(null as Frame?, "Выберите изображение аватара", FileDialog.LOAD)
+        dialog.setFilenameFilter { _, name ->
+            val lower = name.lowercase()
+            lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".webp")
+        }
+        dialog.isVisible = true
+        val dir = dialog.directory
+        val file = dialog.file
+        if (dir != null && file != null) File(dir, file) else null
+    }.getOrElse {
+        runCatching {
+            val chooser = JFileChooser()
+            chooser.fileFilter = FileNameExtensionFilter("Изображения (PNG, JPG, WEBP)", "png", "jpg", "jpeg", "webp")
+            val res = chooser.showOpenDialog(null)
+            if (res == JFileChooser.APPROVE_OPTION) chooser.selectedFile else null
+        }.getOrNull()
+    }
+}
 
 @Composable
 fun BrandMark(
@@ -133,6 +170,7 @@ fun RemoteImage(
             imageBitmap = null
             return@LaunchedEffect
         }
+        failed = false
         val bytes = api.fetchImageBytes(url)
         if (bytes != null && bytes.isNotEmpty()) {
             val decoded = runCatching { SkiaImage.makeFromEncoded(bytes).toComposeImageBitmap() }.getOrNull()
@@ -164,10 +202,10 @@ fun RemoteImage(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = fallbackText.trim().take(2).uppercase().ifBlank { "✦" },
+                text = initialsFromName(fallbackText),
                 color = IskraColors.muted,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
             )
         }
     }
@@ -719,13 +757,13 @@ private fun IskraSidebar(
                     horizontalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
                     RemoteImage(
-                        url = user?.avatarUrl,
+                        url = user?.effectiveAvatarUrl ?: api.session?.cachedAvatarUrl,
                         api = api,
                         modifier = Modifier
                             .size(34.dp)
                             .clip(CircleShape)
                             .border(1.dp, IskraColors.border, CircleShape),
-                        fallbackText = user?.displayName ?: "Я"
+                        fallbackText = user?.displayName?.ifBlank { "Я" } ?: "Я"
                     )
                     Text(
                         text = user?.displayName?.ifBlank { "Профиль" } ?: "Профиль",
@@ -827,13 +865,13 @@ fun CharacterPoster(
     api: IskraApiClient,
     onClick: () -> Unit,
     onToggleLike: () -> Unit,
-    modifier: Modifier = Modifier.width(184.dp).height(246.dp)
+    modifier: Modifier = Modifier.width(166.dp).height(220.dp)
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(IskraColors.surface2)
-            .border(1.dp, IskraColors.border, RoundedCornerShape(20.dp))
+            .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
     ) {
         RemoteImage(
@@ -860,18 +898,18 @@ fun CharacterPoster(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
-                modifier = Modifier.weight(1f).padding(end = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(3.dp)
+                modifier = Modifier.weight(1f).padding(end = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = bot.name,
                     color = Color.White,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -879,7 +917,7 @@ fun CharacterPoster(
                 Text(
                     text = (bot.description ?: "").ifBlank { genreLabel(bot.genre) },
                     color = Color(0xB8FFFFFF),
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -895,7 +933,7 @@ fun CharacterPoster(
                         RoundedCornerShape(999.dp)
                     )
                     .clickable { onToggleLike() }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -921,7 +959,7 @@ fun StoryCardItem(
     story: StorySummary,
     api: IskraApiClient,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier.width(260.dp)
+    modifier: Modifier = Modifier.width(250.dp)
 ) {
     Column(
         modifier = modifier
@@ -934,14 +972,14 @@ fun StoryCardItem(
             RemoteImage(
                 url = story.coverUrl,
                 api = api,
-                modifier = Modifier.fillMaxWidth().height(126.dp),
+                modifier = Modifier.fillMaxWidth().height(120.dp),
                 contentScale = ContentScale.Crop,
                 fallbackText = story.title
             )
         }
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -968,7 +1006,7 @@ fun StoryCardItem(
             )
             Text(
                 text = story.description.ifBlank { story.subtitle.ifBlank { "Интерактивная история" } },
-                fontSize = 13.sp,
+                fontSize = 12.sp,
                 color = IskraColors.muted,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -1001,20 +1039,20 @@ private fun HomePage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(32.dp)
+            .padding(horizontal = 28.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RoundedCornerShape(22.dp))
                 .background(
                     Brush.linearGradient(
                         colors = listOf(IskraColors.surface2, IskraColors.surface)
                     )
                 )
-                .border(1.dp, IskraColors.border, RoundedCornerShape(24.dp))
-                .padding(horizontal = 40.dp, vertical = 36.dp)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(22.dp))
+                .padding(horizontal = 28.dp, vertical = 22.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1022,22 +1060,22 @@ private fun HomePage(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(
-                    modifier = Modifier.weight(1f).padding(end = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier.weight(1f).padding(end = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(IskraColors.surface)
                             .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
-                            .padding(horizontal = 12.dp, vertical = 5.dp),
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text("✦", fontSize = 11.sp, color = IskraColors.text)
+                        Text("✦", fontSize = 10.sp, color = IskraColors.text)
                         Text(
                             text = "ISKRAAI",
-                            fontSize = 11.sp,
+                            fontSize = 10.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = IskraColors.muted
                         )
@@ -1045,18 +1083,18 @@ private fun HomePage(
 
                     Text(
                         text = "Начните новую историю",
-                        fontSize = 34.sp,
-                        lineHeight = 40.sp,
+                        fontSize = 27.sp,
+                        lineHeight = 32.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = IskraColors.text
                     )
                     Text(
                         text = "Выберите героя или авторский сюжет. Ваши решения меняют происходящее.",
-                        fontSize = 15.sp,
+                        fontSize = 13.sp,
                         color = IskraColors.muted
                     )
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(2.dp))
 
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(
@@ -1066,9 +1104,9 @@ private fun HomePage(
                                 containerColor = IskraColors.accent,
                                 contentColor = IskraColors.accentInk
                             ),
-                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp)
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp)
                         ) {
-                            Text("Каталог", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("Каталог", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
 
                         OutlinedButton(
@@ -1079,23 +1117,23 @@ private fun HomePage(
                                 containerColor = IskraColors.surface2,
                                 contentColor = IskraColors.text
                             ),
-                            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 11.dp)
+                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp)
                         ) {
-                            Text("+ Создать", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("+ Создать", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
 
                 Box(
                     modifier = Modifier
-                        .size(184.dp)
+                        .size(138.dp)
                         .clip(CircleShape)
                         .border(1.dp, IskraColors.borderStrong, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(128.dp)
+                            .size(96.dp)
                             .clip(CircleShape)
                             .background(IskraColors.surface)
                             .border(1.dp, IskraColors.border, CircleShape),
@@ -1103,13 +1141,13 @@ private fun HomePage(
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            BrandMark(size = 28.dp)
+                            BrandMark(size = 24.dp)
                             Text(
                                 text = "Истории\nотвечают",
-                                fontSize = 11.sp,
-                                lineHeight = 14.sp,
+                                fontSize = 10.sp,
+                                lineHeight = 13.sp,
                                 color = IskraColors.muted,
                                 textAlign = TextAlign.Center
                             )
@@ -1126,7 +1164,7 @@ private fun HomePage(
                     .clip(RoundedCornerShape(14.dp))
                     .background(IskraColors.surface)
                     .border(1.dp, IskraColors.border, RoundedCornerShape(14.dp))
-                    .padding(16.dp),
+                    .padding(14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -1137,7 +1175,7 @@ private fun HomePage(
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1145,7 +1183,7 @@ private fun HomePage(
             ) {
                 Text(
                     text = "Популярные персонажи",
-                    fontSize = 20.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = IskraColors.text
                 )
@@ -1158,13 +1196,13 @@ private fun HomePage(
             }
 
             if (isLoading && popularBots.isEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     repeat(5) {
                         Box(
                             modifier = Modifier
-                                .width(184.dp)
-                                .height(246.dp)
-                                .clip(RoundedCornerShape(20.dp))
+                                .width(166.dp)
+                                .height(220.dp)
+                                .clip(RoundedCornerShape(18.dp))
                                 .background(IskraColors.surface2)
                         )
                     }
@@ -1176,13 +1214,13 @@ private fun HomePage(
                         .clip(RoundedCornerShape(18.dp))
                         .background(IskraColors.surface)
                         .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
-                        .padding(32.dp),
+                        .padding(28.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("Персонажи пока не добавлены.", color = IskraColors.muted)
                 }
             } else {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(popularBots, key = { it.id }) { bot ->
                         CharacterPoster(
                             bot = bot,
@@ -1825,6 +1863,38 @@ private fun ProfilePage(
     onLogout: () -> Unit
 ) {
     var selectedPeriod by remember { mutableStateOf("month") }
+    var legalDocToShow by remember { mutableStateOf<LegalDocType?>(null) }
+    val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
+
+    var devApps by remember { mutableStateOf<List<ClientApp>>(emptyList()) }
+    var maxDevKeys by remember { mutableStateOf(3) }
+    var loadingKeys by remember { mutableStateOf(false) }
+    var keyBusy by remember { mutableStateOf(false) }
+    var newAppName by remember { mutableStateOf("") }
+    var newAppPlatform by remember { mutableStateOf("desktop") }
+    var revealedRawKey by remember { mutableStateOf<String?>(null) }
+    var keyStatusMsg by remember { mutableStateOf<String?>(null) }
+    var customClientKeyInput by remember { mutableStateOf(api.activeClientKey()) }
+
+    fun reloadKeys() {
+        scope.launch {
+            loadingKeys = true
+            runCatching { api.getDeveloperKeys() }
+                .onSuccess { res ->
+                    devApps = res.apps
+                    maxDevKeys = res.maxKeys
+                }
+            loadingKeys = false
+        }
+    }
+
+    LaunchedEffect(user?.id) {
+        if (user != null) {
+            reloadKeys()
+        }
+    }
+
     val currentTier = (user?.tier ?: "free").lowercase()
     val periodOptions = listOf(
         Triple("7d", "7 дней", null),
@@ -1853,6 +1923,13 @@ private fun ProfilePage(
         Triple("blue", "Океан", Color(0xFF8EC7EA)),
         Triple("emerald", "Изумруд", Color(0xFF6EE7B7))
     )
+
+    if (legalDocToShow != null) {
+        LegalDocumentDialog(
+            initialTab = legalDocToShow!!,
+            onDismiss = { legalDocToShow = null }
+        )
+    }
 
     Box(
         modifier = Modifier
@@ -1883,7 +1960,7 @@ private fun ProfilePage(
                     modifier = Modifier.weight(1f)
                 ) {
                     RemoteImage(
-                        url = user?.avatarUrl,
+                        url = user?.effectiveAvatarUrl?.ifBlank { api.session?.cachedAvatarUrl } ?: api.session?.cachedAvatarUrl,
                         api = api,
                         modifier = Modifier
                             .size(58.dp)
@@ -2189,6 +2266,319 @@ private fun ProfilePage(
                     .background(IskraColors.surface)
                     .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
                     .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("API ключи и клиентский доступ", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = IskraColors.text)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(999.dp))
+                                    .background(Color(0x2634D399))
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Доступно всем (${devApps.count { it.status == "active" }}/$maxDevKeys)",
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF34D399)
+                                )
+                            }
+                        }
+                        Text(
+                            text = "Создавайте и управляйте ключами X-Iskra-Client-Key (iskra_live_...) для любых клиентов",
+                            fontSize = 12.sp,
+                            color = IskraColors.muted
+                        )
+                    }
+                    Text(
+                        text = if (loadingKeys) "..." else "↻ Обновить",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = IskraColors.muted,
+                        modifier = Modifier.clickable { reloadKeys() }
+                    )
+                }
+
+                if (revealedRawKey != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x1A34D399))
+                            .border(1.dp, Color(0x5534D399), RoundedCornerShape(12.dp))
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Ваш новый API ключ (сохраните его):",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF34D399)
+                        )
+                        Text(
+                            text = revealedRawKey!!,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = IskraColors.text
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(
+                                onClick = {
+                                    clipboard.setText(AnnotatedString(revealedRawKey!!))
+                                    keyStatusMsg = "Ключ скопирован в буфер обмена"
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = IskraColors.accent,
+                                    contentColor = IskraColors.accentInk
+                                ),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Скопировать", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    api.updateClientKey(revealedRawKey!!)
+                                    customClientKeyInput = revealedRawKey!!
+                                    keyStatusMsg = "Ключ применён для текущего приложения"
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, IskraColors.border),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                            ) {
+                                Text("Применить в этом клиенте", fontSize = 11.sp, color = IskraColors.text)
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        IskraField(
+                            value = newAppName,
+                            onValueChange = { newAppName = it },
+                            label = "Название приложения",
+                            placeholder = "Например: Мой Desktop клиент"
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            if (newAppName.trim().length < 2) {
+                                keyStatusMsg = "Введите название от 2 символов"
+                                return@Button
+                            }
+                            scope.launch {
+                                keyBusy = true
+                                keyStatusMsg = null
+                                runCatching {
+                                    api.createDeveloperKey(newAppName.trim(), newAppPlatform)
+                                }.onSuccess { created ->
+                                    revealedRawKey = created.rawKey
+                                    newAppName = ""
+                                    reloadKeys()
+                                }.onFailure { e ->
+                                    keyStatusMsg = e.message ?: "Не удалось выпустить ключ"
+                                }
+                                keyBusy = false
+                            }
+                        },
+                        enabled = !keyBusy,
+                        modifier = Modifier.height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = IskraColors.accent,
+                            contentColor = IskraColors.accentInk
+                        ),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        Text(if (keyBusy) "..." else "+ Создать ключ", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf(
+                        "desktop" to "Desktop",
+                        "android" to "Android",
+                        "ios" to "iOS",
+                        "web" to "Web"
+                    ).forEach { (pid, plabel) ->
+                        val active = newAppPlatform == pid
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (active) IskraColors.text else IskraColors.surface2)
+                                .border(1.dp, IskraColors.border, RoundedCornerShape(8.dp))
+                                .clickable { newAppPlatform = pid }
+                                .padding(horizontal = 10.dp, vertical = 5.dp)
+                        ) {
+                            Text(
+                                text = plabel,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (active) IskraColors.canvas else IskraColors.muted
+                            )
+                        }
+                    }
+                }
+
+                if (devApps.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        devApps.forEach { appItem ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(IskraColors.surface2)
+                                    .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = appItem.appName,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = IskraColors.text
+                                        )
+                                        Text(
+                                            text = appItem.platform.uppercase(),
+                                            fontSize = 10.sp,
+                                            color = IskraColors.muted
+                                        )
+                                    }
+                                    Text(
+                                        text = "${appItem.keyPrefix}... • ${if (appItem.status == "active") "Активен" else "Отозван"}",
+                                        fontSize = 11.sp,
+                                        color = if (appItem.status == "active") Color(0xFF34D399) else IskraColors.subtle
+                                    )
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    if (appItem.status == "active") {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(IskraColors.surface)
+                                                .border(1.dp, IskraColors.border, RoundedCornerShape(8.dp))
+                                                .clickable {
+                                                    scope.launch {
+                                                        keyBusy = true
+                                                        runCatching { api.rotateDeveloperKey(appItem.id) }
+                                                            .onSuccess { rotated ->
+                                                                revealedRawKey = rotated.rawKey
+                                                                keyStatusMsg = "Ключ перевыпущен"
+                                                                reloadKeys()
+                                                            }
+                                                            .onFailure { e -> keyStatusMsg = e.message }
+                                                        keyBusy = false
+                                                    }
+                                                }
+                                                .padding(horizontal = 9.dp, vertical = 5.dp)
+                                        ) {
+                                            Text("Перевыпустить", fontSize = 11.sp, color = IskraColors.text)
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0x1FF87171))
+                                            .border(1.dp, Color(0x4DF87171), RoundedCornerShape(8.dp))
+                                            .clickable {
+                                                scope.launch {
+                                                    keyBusy = true
+                                                    runCatching {
+                                                        api.revokeDeveloperKey(appItem.id, permanent = true)
+                                                    }.onSuccess {
+                                                        keyStatusMsg = "Ключ удалён"
+                                                        reloadKeys()
+                                                    }.onFailure { e -> keyStatusMsg = e.message }
+                                                    keyBusy = false
+                                                }
+                                            }
+                                            .padding(horizontal = 9.dp, vertical = 5.dp)
+                                    ) {
+                                        Text("Удалить", fontSize = 11.sp, color = IskraColors.danger)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (keyStatusMsg != null) {
+                    Text(keyStatusMsg!!, fontSize = 12.sp, color = IskraColors.muted)
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(IskraColors.surface)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                    .padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("ПРАВОВАЯ ИНФОРМАЦИЯ И ДОКУМЕНТЫ (18+)", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = IskraColors.muted)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(IskraColors.surface2)
+                            .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                            .clickable { legalDocToShow = LegalDocType.PRIVACY },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Политика конфиденциальности", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(IskraColors.surface2)
+                            .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                            .clickable { legalDocToShow = LegalDocType.TERMS },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Пользовательское соглашение", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(IskraColors.surface)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                    .padding(18.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text("СОЦИАЛЬНЫЕ СЕТИ", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = IskraColors.muted)
@@ -2257,7 +2647,7 @@ private fun SettingsModal(
     val scope = rememberCoroutineScope()
     var tab by remember { mutableStateOf("appearance") }
     var name by remember(user) { mutableStateOf(user?.displayName ?: "") }
-    var avatar by remember(user) { mutableStateOf(user?.avatarUrl ?: "") }
+    var avatar by remember(user) { mutableStateOf(user?.effectiveAvatarUrl?.ifBlank { api.session?.cachedAvatarUrl } ?: api.session?.cachedAvatarUrl ?: "") }
     var statusMsg by remember { mutableStateOf<String?>(null) }
 
     val palettes = listOf(
@@ -3133,34 +3523,42 @@ private fun AuthPage(
     var busy by remember { mutableStateOf(false) }
     var errorMsg by remember { mutableStateOf<String?>(null) }
     var infoMsg by remember { mutableStateOf<String?>(null) }
+    var legalDocToShow by remember { mutableStateOf<LegalDocType?>(null) }
+
+    if (legalDocToShow != null) {
+        LegalDocumentDialog(
+            initialTab = legalDocToShow!!,
+            onDismiss = { legalDocToShow = null }
+        )
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(IskraColors.canvas)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 20.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .width(440.dp)
-                .clip(RoundedCornerShape(24.dp))
+                .width(420.dp)
+                .clip(RoundedCornerShape(22.dp))
                 .background(IskraColors.surface)
-                .border(1.dp, IskraColors.border, RoundedCornerShape(24.dp))
+                .border(1.dp, IskraColors.border, RoundedCornerShape(22.dp))
                 .animateContentSize(animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing))
-                .padding(horizontal = 32.dp, vertical = 28.dp),
+                .padding(horizontal = 24.dp, vertical = 18.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                BrandMark(size = 56.dp)
+                BrandMark(size = 36.dp)
                 Text(
                     text = "IskraAi",
-                    fontSize = 19.sp,
+                    fontSize = 18.sp,
                     fontWeight = FontWeight.Black,
                     color = IskraColors.text
                 )
@@ -3176,7 +3574,7 @@ private fun AuthPage(
             ) { currentMode ->
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
                         text = when (currentMode) {
@@ -3186,7 +3584,7 @@ private fun AuthPage(
                             "reset" -> "Новый пароль"
                             else -> "С возвращением"
                         },
-                        fontSize = 23.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = IskraColors.text
                     )
@@ -3198,7 +3596,7 @@ private fun AuthPage(
                             "reset" -> "Введите код из письма и новый пароль"
                             else -> "Продолжи свои истории"
                         },
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         color = IskraColors.muted,
                         textAlign = TextAlign.Center
                     )
@@ -3222,12 +3620,12 @@ private fun AuthPage(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(Color(0x1FF87171))
-                        .border(1.dp, Color(0x4DF87171), RoundedCornerShape(12.dp))
-                        .padding(12.dp)
+                        .border(1.dp, Color(0x4DF87171), RoundedCornerShape(10.dp))
+                        .padding(10.dp)
                 ) {
-                    Text(errorMsg!!, color = IskraColors.danger, fontSize = 13.sp)
+                    Text(errorMsg!!, color = IskraColors.danger, fontSize = 12.sp)
                 }
             }
 
@@ -3235,12 +3633,12 @@ private fun AuthPage(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .background(IskraColors.surface2)
-                        .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
-                        .padding(12.dp)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(10.dp))
+                        .padding(10.dp)
                 ) {
-                    Text(infoMsg!!, color = IskraColors.text, fontSize = 13.sp)
+                    Text(infoMsg!!, color = IskraColors.text, fontSize = 12.sp)
                 }
             }
 
@@ -3262,7 +3660,7 @@ private fun AuthPage(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
                     when (currentMode) {
                         "register" -> {
@@ -3277,20 +3675,47 @@ private fun AuthPage(
                                 onToggleVisible = { showPassword = !showPassword }
                             )
 
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { acceptTerms = !acceptTerms }
-                                    .padding(vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
-                                Checkbox(checked = acceptTerms, onCheckedChange = { acceptTerms = it })
-                                Text(
-                                    text = "Мне исполнилось 18 лет, и я принимаю условия использования",
-                                    fontSize = 12.sp,
-                                    color = IskraColors.muted
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { acceptTerms = !acceptTerms },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = acceptTerms,
+                                        onCheckedChange = { acceptTerms = it }
+                                    )
+                                    Text(
+                                        text = "Мне исполнилось 18 лет, и я принимаю условия и политику",
+                                        fontSize = 11.sp,
+                                        color = IskraColors.muted
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier.padding(start = 12.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Text(
+                                        text = "Условия использования",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = IskraColors.text,
+                                        modifier = Modifier.clickable { legalDocToShow = LegalDocType.TERMS }
+                                    )
+                                    Text("•", fontSize = 11.sp, color = IskraColors.subtle)
+                                    Text(
+                                        text = "Политика конфиденциальности",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = IskraColors.text,
+                                        modifier = Modifier.clickable { legalDocToShow = LegalDocType.PRIVACY }
+                                    )
+                                }
                             }
 
                             Button(
@@ -3300,7 +3725,7 @@ private fun AuthPage(
                                         return@Button
                                     }
                                     if (!acceptTerms) {
-                                        errorMsg = "Необходимо подтвердить возраст и принять условия"
+                                        errorMsg = "Необходимо подтвердить возраст (18+) и принять условия"
                                         return@Button
                                     }
                                     scope.launch {
@@ -3322,14 +3747,14 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Отправка..." else "Получить код подтверждения", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Отправка..." else "Получить код подтверждения", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
 
@@ -3379,14 +3804,14 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Вход..." else "Войти", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Вход..." else "Войти", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
 
@@ -3418,14 +3843,14 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Проверка..." else "Подтвердить и войти", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Проверка..." else "Подтвердить и войти", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
 
                             Text(
@@ -3457,14 +3882,14 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Отправка..." else "Отправить код", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Отправка..." else "Отправить код", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
                             Text(
                                 text = "Вернуться ко входу",
@@ -3500,14 +3925,14 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(46.dp),
+                                modifier = Modifier.fillMaxWidth().height(42.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Сохранение..." else "Сохранить пароль", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Сохранение..." else "Сохранить пароль", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -3520,6 +3945,25 @@ private fun AuthPage(
                 color = IskraColors.subtle,
                 modifier = Modifier.clickable { onContinueGuest() }
             )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Политика конфиденциальности",
+                    fontSize = 10.sp,
+                    color = IskraColors.subtle,
+                    modifier = Modifier.clickable { legalDocToShow = LegalDocType.PRIVACY }
+                )
+                Text("•", fontSize = 10.sp, color = IskraColors.subtle)
+                Text(
+                    text = "Условия (18+)",
+                    fontSize = 10.sp,
+                    color = IskraColors.subtle,
+                    modifier = Modifier.clickable { legalDocToShow = LegalDocType.TERMS }
+                )
+            }
         }
     }
 }
@@ -3533,10 +3977,10 @@ private fun AnimatedAuthTabs(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(13.dp))
+            .height(42.dp)
+            .clip(RoundedCornerShape(12.dp))
             .background(IskraColors.surface2)
-            .border(1.dp, IskraColors.border, RoundedCornerShape(13.dp))
+            .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
             .padding(4.dp)
     ) {
         val pillWidth = (maxWidth - 4.dp) / 2
