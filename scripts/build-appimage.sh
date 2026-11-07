@@ -13,6 +13,8 @@ cat << 'EOF' > AppDir/AppRun
 #!/bin/sh
 SELF=$(readlink -f "$0")
 HERE=${SELF%/*}
+export _JAVA_AWT_WM_NONREPARENTING=1
+export AWT_TOOLKIT=XToolkit
 exec "$HERE/usr/bin/iskra" "$@"
 EOF
 chmod +x AppDir/AppRun

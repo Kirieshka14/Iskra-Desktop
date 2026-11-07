@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -27,6 +29,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -595,23 +598,23 @@ private fun IskraSidebar(
 ) {
     Column(
         modifier = Modifier
-            .width(264.dp)
+            .width(228.dp)
             .fillMaxHeight()
             .background(IskraColors.surface)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp)
+                .height(52.dp)
                 .clickable { onNavigate(DesktopRoute.HOME) }
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(11.dp)
+            horizontalArrangement = Arrangement.spacedBy(9.dp)
         ) {
-            BrandMark(size = 38.dp)
+            BrandMark(size = 32.dp)
             Text(
                 text = "IskraAi",
-                fontSize = 19.sp,
+                fontSize = 17.sp,
                 fontWeight = FontWeight.Bold,
                 color = IskraColors.text
             )
@@ -623,8 +626,8 @@ private fun IskraSidebar(
                 .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(horizontal = 10.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(3.dp)
         ) {
             SidebarNavButton(
                 label = "Главная",
@@ -651,9 +654,9 @@ private fun IskraSidebar(
                 onClick = { onNavigate(DesktopRoute.PROFILE) }
             )
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
             HorizontalDivider(color = IskraColors.border)
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
 
             SidebarNavButton(
                 label = "Создать персонажа",
@@ -670,34 +673,34 @@ private fun IskraSidebar(
             )
 
             if (recentBots.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                HorizontalDivider(color = IskraColors.border)
                 Spacer(Modifier.height(6.dp))
+                HorizontalDivider(color = IskraColors.border)
+                Spacer(Modifier.height(4.dp))
                 Text(
                     text = "НЕДАВНИЕ ЧАТЫ",
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
                     color = IskraColors.muted,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp)
                 )
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     recentBots.forEach { bot ->
                         val isSelected = selectedBotId == bot.id
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(RoundedCornerShape(10.dp))
                                 .background(if (isSelected) IskraColors.accentSoft else Color.Transparent)
                                 .clickable { onSelectRecentBot(bot) }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                .padding(horizontal = 8.dp, vertical = 5.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             RemoteImage(
                                 url = bot.avatarUrl,
                                 api = api,
                                 modifier = Modifier
-                                    .size(34.dp)
+                                    .size(30.dp)
                                     .clip(CircleShape)
                                     .border(1.dp, IskraColors.border, CircleShape),
                                 fallbackText = bot.name
@@ -705,7 +708,7 @@ private fun IskraSidebar(
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = bot.name,
-                                    fontSize = 13.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
                                     color = if (isSelected) IskraColors.accent else IskraColors.text,
                                     maxLines = 1,
@@ -714,7 +717,7 @@ private fun IskraSidebar(
                                 if (!bot.description.isNullOrBlank()) {
                                     Text(
                                         text = "— ${bot.description}",
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         color = IskraColors.muted,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis
@@ -723,7 +726,7 @@ private fun IskraSidebar(
                             }
                             Text(
                                 text = "×",
-                                fontSize = 14.sp,
+                                fontSize = 13.sp,
                                 color = IskraColors.subtle,
                                 modifier = Modifier
                                     .clip(CircleShape)
@@ -742,7 +745,7 @@ private fun IskraSidebar(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(IskraColors.surface)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 10.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -750,24 +753,24 @@ private fun IskraSidebar(
                 Row(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(12.dp))
+                        .clip(RoundedCornerShape(10.dp))
                         .clickable { onOpenSettings() }
-                        .padding(horizontal = 6.dp, vertical = 5.dp),
+                        .padding(horizontal = 5.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(9.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     RemoteImage(
                         url = user?.effectiveAvatarUrl ?: api.session?.cachedAvatarUrl,
                         api = api,
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(30.dp)
                             .clip(CircleShape)
                             .border(1.dp, IskraColors.border, CircleShape),
                         fallbackText = user?.displayName?.ifBlank { "Я" } ?: "Я"
                     )
                     Text(
                         text = user?.displayName?.ifBlank { "Профиль" } ?: "Профиль",
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = IskraColors.text,
                         maxLines = 1,
@@ -779,22 +782,23 @@ private fun IskraSidebar(
             } else {
                 Button(
                     onClick = { onNavigate(DesktopRoute.AUTH) },
-                    modifier = Modifier.weight(1f).height(38.dp),
-                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f).height(34.dp),
+                    shape = RoundedCornerShape(9.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = IskraColors.accent,
                         contentColor = IskraColors.accentInk
                     )
                 ) {
-                    Text("Войти", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Войти", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
 
             Box(
                 modifier = Modifier
-                    .size(34.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .border(1.dp, IskraColors.border, RoundedCornerShape(10.dp))
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(9.dp))
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(9.dp))
                     .clickable { onToggleDark() },
                 contentAlignment = Alignment.Center
             ) {
@@ -802,7 +806,7 @@ private fun IskraSidebar(
                     imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
                     contentDescription = "Тема",
                     tint = IskraColors.muted,
-                    modifier = Modifier.size(17.dp)
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
@@ -821,26 +825,26 @@ private fun SidebarNavButton(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(if (active) IskraColors.accentSoft else Color.Transparent)
             .then(
-                if (active) Modifier.border(1.dp, IskraColors.accent.copy(alpha = 0.28f), RoundedCornerShape(12.dp))
+                if (active) Modifier.border(1.dp, IskraColors.accent.copy(alpha = 0.28f), RoundedCornerShape(10.dp))
                 else Modifier
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp, vertical = 9.dp),
+            .padding(horizontal = 11.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(11.dp)
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = label,
             tint = if (active) IskraColors.accent else IskraColors.muted,
-            modifier = Modifier.size(18.dp)
+            modifier = Modifier.size(17.dp)
         )
         Text(
             text = label,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
             color = if (active) IskraColors.accent else IskraColors.muted,
             modifier = Modifier.weight(1f)
@@ -851,9 +855,9 @@ private fun SidebarNavButton(
                     .clip(RoundedCornerShape(999.dp))
                     .background(IskraColors.surface3)
                     .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 7.dp, vertical = 2.dp)
+                    .padding(horizontal = 6.dp, vertical = 1.dp)
             ) {
-                Text(badgeText, fontSize = 10.sp, color = IskraColors.accent, fontWeight = FontWeight.SemiBold)
+                Text(badgeText, fontSize = 9.sp, color = IskraColors.accent, fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -865,13 +869,13 @@ fun CharacterPoster(
     api: IskraApiClient,
     onClick: () -> Unit,
     onToggleLike: () -> Unit,
-    modifier: Modifier = Modifier.width(166.dp).height(220.dp)
+    modifier: Modifier = Modifier.width(152.dp).height(200.dp)
 ) {
     Box(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(IskraColors.surface2)
-            .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+            .border(1.dp, IskraColors.border, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
     ) {
         RemoteImage(
@@ -898,7 +902,7 @@ fun CharacterPoster(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(10.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -909,7 +913,7 @@ fun CharacterPoster(
                 Text(
                     text = bot.name,
                     color = Color.White,
-                    fontSize = 14.sp,
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -917,7 +921,7 @@ fun CharacterPoster(
                 Text(
                     text = (bot.description ?: "").ifBlank { genreLabel(bot.genre) },
                     color = Color(0xB8FFFFFF),
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -933,20 +937,20 @@ fun CharacterPoster(
                         RoundedCornerShape(999.dp)
                     )
                     .clickable { onToggleLike() }
-                    .padding(horizontal = 7.dp, vertical = 3.dp),
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
             ) {
                 Icon(
                     imageVector = if (bot.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                     contentDescription = "Нравится",
                     tint = Color.White,
-                    modifier = Modifier.size(11.dp)
+                    modifier = Modifier.size(10.dp)
                 )
                 Text(
                     text = bot.likesCount.toString(),
                     color = Color.White,
-                    fontSize = 11.sp,
+                    fontSize = 10.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
@@ -959,27 +963,27 @@ fun StoryCardItem(
     story: StorySummary,
     api: IskraApiClient,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier.width(250.dp)
+    modifier: Modifier = Modifier.width(236.dp)
 ) {
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(16.dp))
             .background(IskraColors.surface)
-            .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+            .border(1.dp, IskraColors.border, RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
     ) {
         if (!story.coverUrl.isNullOrBlank()) {
             RemoteImage(
                 url = story.coverUrl,
                 api = api,
-                modifier = Modifier.fillMaxWidth().height(120.dp),
+                modifier = Modifier.fillMaxWidth().height(106.dp),
                 contentScale = ContentScale.Crop,
                 fallbackText = story.title
             )
         }
         Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(5.dp)
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -998,7 +1002,7 @@ fun StoryCardItem(
             }
             Text(
                 text = story.title,
-                fontSize = 15.sp,
+                fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = IskraColors.text,
                 maxLines = 1,
@@ -1006,7 +1010,7 @@ fun StoryCardItem(
             )
             Text(
                 text = story.description.ifBlank { story.subtitle.ifBlank { "Интерактивная история" } },
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = IskraColors.muted,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -1039,20 +1043,20 @@ private fun HomePage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 28.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+            .padding(horizontal = 22.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .background(
                     Brush.linearGradient(
                         colors = listOf(IskraColors.surface2, IskraColors.surface)
                     )
                 )
-                .border(1.dp, IskraColors.border, RoundedCornerShape(22.dp))
-                .padding(horizontal = 28.dp, vertical = 22.dp)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                .padding(horizontal = 22.dp, vertical = 16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1060,22 +1064,22 @@ private fun HomePage(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(
-                    modifier = Modifier.weight(1f).padding(end = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.weight(1f).padding(end = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .clip(RoundedCornerShape(999.dp))
                             .background(IskraColors.surface)
                             .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
-                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                            .padding(horizontal = 9.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp)
                     ) {
-                        Text("✦", fontSize = 10.sp, color = IskraColors.text)
+                        Text("✦", fontSize = 9.sp, color = IskraColors.text)
                         Text(
                             text = "ISKRAAI",
-                            fontSize = 10.sp,
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = IskraColors.muted
                         )
@@ -1083,57 +1087,59 @@ private fun HomePage(
 
                     Text(
                         text = "Начните новую историю",
-                        fontSize = 27.sp,
-                        lineHeight = 32.sp,
+                        fontSize = 22.sp,
+                        lineHeight = 26.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = IskraColors.text
                     )
                     Text(
                         text = "Выберите героя или авторский сюжет. Ваши решения меняют происходящее.",
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         color = IskraColors.muted
                     )
 
                     Spacer(Modifier.height(2.dp))
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(
                             onClick = onOpenCatalog,
+                            modifier = Modifier.height(34.dp),
                             shape = RoundedCornerShape(999.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = IskraColors.accent,
                                 contentColor = IskraColors.accentInk
                             ),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
                         ) {
-                            Text("Каталог", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text("Каталог", fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
 
                         OutlinedButton(
                             onClick = onOpenCreate,
+                            modifier = Modifier.height(34.dp),
                             shape = RoundedCornerShape(999.dp),
                             border = BorderStroke(1.dp, IskraColors.borderStrong),
                             colors = ButtonDefaults.outlinedButtonColors(
                                 containerColor = IskraColors.surface2,
                                 contentColor = IskraColors.text
                             ),
-                            contentPadding = PaddingValues(horizontal = 18.dp, vertical = 9.dp)
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp)
                         ) {
-                            Text("+ Создать", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                            Text("+ Создать", fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                 }
 
                 Box(
                     modifier = Modifier
-                        .size(138.dp)
+                        .size(104.dp)
                         .clip(CircleShape)
                         .border(1.dp, IskraColors.borderStrong, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(96.dp)
+                            .size(74.dp)
                             .clip(CircleShape)
                             .background(IskraColors.surface)
                             .border(1.dp, IskraColors.border, CircleShape),
@@ -1141,13 +1147,13 @@ private fun HomePage(
                     ) {
                         Column(
                             horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
-                            BrandMark(size = 24.dp)
+                            BrandMark(size = 20.dp)
                             Text(
                                 text = "Истории\nотвечают",
-                                fontSize = 10.sp,
-                                lineHeight = 13.sp,
+                                fontSize = 9.sp,
+                                lineHeight = 11.sp,
                                 color = IskraColors.muted,
                                 textAlign = TextAlign.Center
                             )
@@ -1161,21 +1167,21 @@ private fun HomePage(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(IskraColors.surface)
-                    .border(1.dp, IskraColors.border, RoundedCornerShape(14.dp))
-                    .padding(14.dp),
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(errorText, color = IskraColors.muted, fontSize = 13.sp)
+                Text(errorText, color = IskraColors.muted, fontSize = 12.sp)
                 TextButton(onClick = onRefresh) {
-                    Text("Повторить", color = IskraColors.text)
+                    Text("Повторить", color = IskraColors.text, fontSize = 12.sp)
                 }
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1183,26 +1189,26 @@ private fun HomePage(
             ) {
                 Text(
                     text = "Популярные персонажи",
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = IskraColors.text
                 )
                 Text(
                     text = "Все →",
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     color = IskraColors.muted,
                     modifier = Modifier.clickable { onOpenCatalog() }
                 )
             }
 
             if (isLoading && popularBots.isEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     repeat(5) {
                         Box(
                             modifier = Modifier
-                                .width(166.dp)
-                                .height(220.dp)
-                                .clip(RoundedCornerShape(18.dp))
+                                .width(152.dp)
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(16.dp))
                                 .background(IskraColors.surface2)
                         )
                     }
@@ -1211,16 +1217,16 @@ private fun HomePage(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(18.dp))
+                        .clip(RoundedCornerShape(16.dp))
                         .background(IskraColors.surface)
-                        .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
-                        .padding(28.dp),
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(16.dp))
+                        .padding(20.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("Персонажи пока не добавлены.", color = IskraColors.muted)
+                    Text("Персонажи пока не добавлены.", color = IskraColors.muted, fontSize = 12.sp)
                 }
             } else {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(popularBots, key = { it.id }) { bot ->
                         CharacterPoster(
                             bot = bot,
@@ -1236,27 +1242,27 @@ private fun HomePage(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(IskraColors.surface)
-                .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                .border(1.dp, IskraColors.border, RoundedCornerShape(16.dp))
                 .clickable { onOpenTavern() }
-                .padding(horizontal = 24.dp, vertical = 22.dp),
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(
                 modifier = Modifier.weight(1f).padding(end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     text = "Таверна",
-                    fontSize = 17.sp,
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = IskraColors.text
                 )
                 Text(
                     text = "Не знаешь с кем пообщаться? Случайный собеседник, дуэт или трио в одной комнате.",
-                    fontSize = 13.sp,
+                    fontSize = 12.sp,
                     color = IskraColors.muted
                 )
             }
@@ -1265,9 +1271,9 @@ private fun HomePage(
                     .clip(RoundedCornerShape(999.dp))
                     .background(IskraColors.surface2)
                     .border(1.dp, IskraColors.border, RoundedCornerShape(999.dp))
-                    .padding(horizontal = 16.dp, vertical = 9.dp)
+                    .padding(horizontal = 14.dp, vertical = 7.dp)
             ) {
-                Text("Перейти →", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
+                Text("Перейти →", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
             }
         }
 
@@ -1348,50 +1354,62 @@ private fun CatalogPage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+            .padding(horizontal = 24.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = "ВСЕ ПЕРСОНАЖИ",
-                fontSize = 11.sp,
+                fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = IskraColors.subtle
             )
             Text(
                 text = "Каталог",
-                fontSize = 28.sp,
+                fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = IskraColors.text
             )
             Text(
                 text = "Персонажи разделены по жанрам и отсортированы по лайкам.",
-                fontSize = 14.sp,
+                fontSize = 12.sp,
                 color = IskraColors.muted
             )
         }
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
+            BasicTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Найти персонажа", color = IskraColors.subtle, fontSize = 14.sp) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = IskraColors.muted) },
                 singleLine = true,
-                shape = RoundedCornerShape(12.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedContainerColor = IskraColors.surface,
-                    unfocusedContainerColor = IskraColors.surface,
-                    focusedBorderColor = IskraColors.borderStrong,
-                    unfocusedBorderColor = IskraColors.border,
-                    focusedTextColor = IskraColors.text,
-                    unfocusedTextColor = IskraColors.text
-                ),
-                modifier = Modifier.width(300.dp)
+                textStyle = TextStyle(color = IskraColors.text, fontSize = 13.sp),
+                cursorBrush = SolidColor(IskraColors.accent),
+                modifier = Modifier.width(260.dp),
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(IskraColors.surface)
+                            .border(1.dp, IskraColors.border, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 11.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Search, contentDescription = null, tint = IskraColors.muted, modifier = Modifier.size(16.dp))
+                        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                            if (searchQuery.isEmpty()) {
+                                Text("Найти персонажа", color = IskraColors.subtle, fontSize = 12.sp)
+                            }
+                            innerTextField()
+                        }
+                    }
+                }
             )
 
             LazyRow(
@@ -1488,11 +1506,11 @@ private fun FilterChipButton(label: String, active: Boolean, onClick: () -> Unit
             .background(if (active) IskraColors.text else IskraColors.surface)
             .border(1.dp, if (active) IskraColors.text else IskraColors.border, RoundedCornerShape(999.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp)
+            .padding(horizontal = 12.dp, vertical = 6.dp)
     ) {
         Text(
             text = label,
-            fontSize = 13.sp,
+            fontSize = 12.sp,
             fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
             color = if (active) IskraColors.canvas else IskraColors.muted
         )
@@ -1525,25 +1543,25 @@ private fun CollectionPage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+            .padding(horizontal = 24.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                 Text(
                     text = "Созданное",
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (mainTab == "created") IskraColors.text else IskraColors.subtle,
                     modifier = Modifier.clickable { mainTab = "created" }
                 )
                 Text(
                     text = "Избранное",
-                    fontSize = 22.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (mainTab == "liked") IskraColors.text else IskraColors.subtle,
                     modifier = Modifier.clickable { mainTab = "liked" }
@@ -1552,13 +1570,15 @@ private fun CollectionPage(
 
             Button(
                 onClick = onCreateBot,
+                modifier = Modifier.height(34.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                 shape = RoundedCornerShape(999.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = IskraColors.accent,
                     contentColor = IskraColors.accentInk
                 )
             ) {
-                Text("+ Персонаж", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("+ Персонаж", fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
         }
 
@@ -1723,30 +1743,30 @@ private fun CreateBotPage(
     Row(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        horizontalArrangement = Arrangement.spacedBy(28.dp)
+            .padding(horizontal = 22.dp, vertical = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Column(
             modifier = Modifier
-                .width(260.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .width(214.dp)
+                .clip(RoundedCornerShape(18.dp))
                 .background(IskraColors.surface)
-                .border(1.dp, IskraColors.border, RoundedCornerShape(20.dp))
-                .padding(20.dp),
+                .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                .padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Предпросмотр", fontSize = 12.sp, color = IskraColors.subtle)
+            Text("Предпросмотр", fontSize = 11.sp, color = IskraColors.subtle)
             CharacterPoster(
                 bot = previewBot,
                 api = api,
                 onClick = {},
                 onToggleLike = {},
-                modifier = Modifier.width(200.dp).height(266.dp)
+                modifier = Modifier.width(172.dp).height(228.dp)
             )
             Text(
                 text = genreLabel(genre),
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = IskraColors.muted
             )
         }
@@ -1756,15 +1776,15 @@ private fun CreateBotPage(
                 .weight(1f)
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState())
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .background(IskraColors.surface)
-                .border(1.dp, IskraColors.border, RoundedCornerShape(20.dp))
-                .padding(28.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(11.dp)
         ) {
             Text(
                 text = if (existingBot != null) "Редактировать персонажа" else "Создать персонажа",
-                fontSize = 22.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 color = IskraColors.text
             )
@@ -1777,14 +1797,14 @@ private fun CreateBotPage(
                 onValueChange = { systemPrompt = it },
                 label = "Характер, сценарий и поведение (System Prompt)",
                 placeholder = "Опишите личность, предысторию, манеру речи и стартовую сцену...",
-                minLines = 6
+                minLines = 4
             )
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Жанр", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("Жанр", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = IskraColors.muted)
                 FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     GENRE_LABELS.forEach { (key, label) ->
                         FilterChipButton(
@@ -1797,10 +1817,10 @@ private fun CreateBotPage(
             }
 
             if (errorMsg != null) {
-                Text(errorMsg!!, color = IskraColors.danger, fontSize = 13.sp)
+                Text(errorMsg!!, color = IskraColors.danger, fontSize = 12.sp)
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(
                     onClick = {
                         if (name.isBlank() || description.isBlank() || systemPrompt.isBlank()) {
@@ -1829,21 +1849,25 @@ private fun CreateBotPage(
                         }
                     },
                     enabled = !busy,
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                     shape = RoundedCornerShape(999.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = IskraColors.accent,
                         contentColor = IskraColors.accentInk
                     )
                 ) {
-                    Text(if (busy) "Сохранение..." else "Сохранить персонажа", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(if (busy) "Сохранение..." else "Сохранить персонажа", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                 }
 
                 OutlinedButton(
                     onClick = onCancel,
+                    modifier = Modifier.height(36.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                     shape = RoundedCornerShape(999.dp),
                     border = BorderStroke(1.dp, IskraColors.border)
                 ) {
-                    Text("Отмена", color = IskraColors.muted)
+                    Text("Отмена", color = IskraColors.muted, fontSize = 12.sp)
                 }
             }
         }
@@ -2396,13 +2420,13 @@ private fun ProfilePage(
                             }
                         },
                         enabled = !keyBusy,
-                        modifier = Modifier.height(48.dp),
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(38.dp),
+                        shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = IskraColors.accent,
                             contentColor = IskraColors.accentInk
                         ),
-                        contentPadding = PaddingValues(horizontal = 16.dp)
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)
                     ) {
                         Text(if (keyBusy) "..." else "+ Создать ключ", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                     }
@@ -2761,7 +2785,7 @@ private fun SettingsModal(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Checkbox(
+                        CompactCheckbox(
                             checked = wallpapersEnabled,
                             onCheckedChange = { onSaveAppearance(currentPalette, isDark, it) }
                         )
@@ -2895,23 +2919,23 @@ private fun ChatPage(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(IskraColors.surface)
-                .padding(horizontal = 20.dp, vertical = 12.dp),
+                .padding(horizontal = 18.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .border(1.dp, IskraColors.border, RoundedCornerShape(10.dp))
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(9.dp))
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(9.dp))
                         .clickable { onBack() },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.ArrowBack, contentDescription = "Назад", tint = IskraColors.text, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.ArrowBack, contentDescription = "Назад", tint = IskraColors.text, modifier = Modifier.size(15.dp))
                 }
 
                 Row(
@@ -2925,12 +2949,12 @@ private fun ChatPage(
                     RemoteImage(
                         url = bot.avatarUrl,
                         api = api,
-                        modifier = Modifier.size(36.dp).clip(CircleShape),
+                        modifier = Modifier.size(34.dp).clip(CircleShape),
                         fallbackText = bot.name
                     )
                     Column {
-                        Text(bot.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
-                        Text("Нажмите, чтобы открыть профиль", fontSize = 11.sp, color = IskraColors.muted)
+                        Text(bot.name, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+                        Text("Нажмите, чтобы открыть профиль", fontSize = 10.sp, color = IskraColors.muted)
                     }
                 }
             }
@@ -2963,9 +2987,9 @@ private fun ChatPage(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .padding(horizontal = 28.dp),
-            contentPadding = PaddingValues(vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .padding(horizontal = 24.dp),
+            contentPadding = PaddingValues(vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (!bot.description.isNullOrBlank()) {
                 item {
@@ -3091,17 +3115,18 @@ private fun ChatPage(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 28.dp, vertical = 14.dp),
+                .padding(horizontal = 24.dp, vertical = 10.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .widthIn(max = 840.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .height(46.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(IskraColors.surface)
-                    .border(1.dp, IskraColors.borderStrong, RoundedCornerShape(20.dp))
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .border(1.dp, IskraColors.borderStrong, RoundedCornerShape(16.dp))
+                    .padding(horizontal = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
@@ -3110,30 +3135,31 @@ private fun ChatPage(
                         .clip(RoundedCornerShape(8.dp))
                         .background(IskraColors.surface2)
                         .clickable { input = "$input *действие* " }
-                        .padding(horizontal = 8.dp, vertical = 6.dp)
+                        .padding(horizontal = 8.dp, vertical = 5.dp)
                 ) {
-                    Text("*...*", fontSize = 12.sp, color = IskraColors.muted, fontStyle = FontStyle.Italic)
+                    Text("*...*", fontSize = 11.sp, color = IskraColors.muted, fontStyle = FontStyle.Italic)
                 }
 
-                TextField(
+                BasicTextField(
                     value = input,
                     onValueChange = { input = it },
-                    placeholder = { Text("Написать ${bot.name}...", color = IskraColors.subtle, fontSize = 14.sp) },
                     singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        focusedTextColor = IskraColors.text,
-                        unfocusedTextColor = IskraColors.text
-                    ),
-                    modifier = Modifier.weight(1f)
+                    textStyle = TextStyle(color = IskraColors.text, fontSize = 13.sp),
+                    cursorBrush = SolidColor(IskraColors.accent),
+                    modifier = Modifier.weight(1f),
+                    decorationBox = { innerTextField ->
+                        Box(contentAlignment = Alignment.CenterStart) {
+                            if (input.isEmpty()) {
+                                Text("Написать ${bot.name}...", color = IskraColors.subtle, fontSize = 13.sp)
+                            }
+                            innerTextField()
+                        }
+                    }
                 )
 
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
                         .background(if (input.isNotBlank() && !isSending) IskraColors.accent else IskraColors.surface3)
                         .clickable(enabled = input.isNotBlank() && !isSending) { sendCurrentMessage() },
@@ -3143,7 +3169,7 @@ private fun ChatPage(
                         imageVector = Icons.Default.ArrowUpward,
                         contentDescription = "Отправить",
                         tint = if (input.isNotBlank() && !isSending) IskraColors.accentInk else IskraColors.subtle,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -3240,8 +3266,8 @@ private fun StoryReaderPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 36.dp, vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 24.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -3249,72 +3275,78 @@ private fun StoryReaderPage(
         ) {
             OutlinedButton(
                 onClick = onBack,
+                modifier = Modifier.height(34.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                 shape = RoundedCornerShape(999.dp),
                 border = BorderStroke(1.dp, IskraColors.border)
             ) {
-                Text("← Назад", color = IskraColors.text, fontSize = 13.sp)
+                Text("← Назад", color = IskraColors.text, fontSize = 12.sp)
             }
-            Text(story.title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+            Text(story.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
         }
 
         LazyColumn(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(IskraColors.surface)
-                .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+                .border(1.dp, IskraColors.border, RoundedCornerShape(16.dp))
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             if (story.description.isNotBlank()) {
                 item {
-                    Text(story.description, fontSize = 14.sp, lineHeight = 22.sp, color = IskraColors.muted)
+                    Text(story.description, fontSize = 13.sp, lineHeight = 20.sp, color = IskraColors.muted)
                 }
             }
             items(messages, key = { it.id }) { turn ->
                 Text(
                     text = formatMessageRichText(turn.content, IskraColors.text, IskraColors.muted),
-                    fontSize = 14.sp,
-                    lineHeight = 22.sp
+                    fontSize = 13.sp,
+                    lineHeight = 20.sp
                 )
             }
         }
 
         if (choices.isNotEmpty()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 choices.forEach { choice ->
                     OutlinedButton(
                         onClick = { sendChoice(choice) },
                         enabled = !busy,
-                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.height(34.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(10.dp),
                         border = BorderStroke(1.dp, IskraColors.borderStrong)
                     ) {
-                        Text(choice, fontSize = 13.sp, color = IskraColors.text)
+                        Text(choice, fontSize = 12.sp, color = IskraColors.text)
                     }
                 }
             }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            OutlinedTextField(
-                value = customAction,
-                onValueChange = { customAction = it },
-                placeholder = { Text("Ваш ход или решение...", color = IskraColors.subtle) },
-                singleLine = true,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier.weight(1f)
-            )
+            Box(modifier = Modifier.weight(1f)) {
+                IskraField(
+                    value = customAction,
+                    onValueChange = { customAction = it },
+                    label = "",
+                    placeholder = "Ваш ход или решение..."
+                )
+            }
             Button(
                 onClick = { sendChoice(customAction) },
                 enabled = customAction.isNotBlank() && !busy,
+                modifier = Modifier.height(38.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                 shape = RoundedCornerShape(999.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = IskraColors.accent,
                     contentColor = IskraColors.accentInk
                 )
             ) {
-                Text(if (busy) "..." else "Продолжить")
+                Text(if (busy) "..." else "Продолжить", fontSize = 12.sp)
             }
         }
     }
@@ -3368,13 +3400,13 @@ private fun TavernPage(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 36.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+            .padding(horizontal = 24.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text("РОЛЕВАЯ КОМНАТА", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.subtle)
-            Text("Таверна", fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
-            Text("Не знаешь с кем пообщаться? Выбери случайного собеседника, дуэт или трио.", fontSize = 14.sp, color = IskraColors.muted)
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("РОЛЕВАЯ КОМНАТА", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.subtle)
+            Text("Таверна", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
+            Text("Не знаешь с кем пообщаться? Выбери случайного собеседника, дуэт или трио.", fontSize = 12.sp, color = IskraColors.muted)
         }
 
         if (queueStatus != null) {
@@ -3420,15 +3452,19 @@ private fun TavernPage(
                 room.messages.forEach { m ->
                     Text("${m.senderName}: ${m.content}", fontSize = 13.sp, color = IskraColors.text)
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = msgInput,
-                        onValueChange = { msgInput = it },
-                        placeholder = { Text("Сообщение в комнату...") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        IskraField(
+                            value = msgInput,
+                            onValueChange = { msgInput = it },
+                            label = "",
+                            placeholder = "Сообщение в комнату..."
+                        )
+                    }
                     Button(
+                        modifier = Modifier.height(38.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                        shape = RoundedCornerShape(10.dp),
                         onClick = {
                             val text = msgInput.trim()
                             if (text.isNotBlank()) {
@@ -3442,7 +3478,7 @@ private fun TavernPage(
                             }
                         }
                     ) {
-                        Text("Отправить")
+                        Text("Отправить", fontSize = 12.sp)
                     }
                 }
             }
@@ -3537,28 +3573,29 @@ private fun AuthPage(
             .fillMaxSize()
             .background(IskraColors.canvas)
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
             modifier = Modifier
-                .width(420.dp)
-                .clip(RoundedCornerShape(22.dp))
+                .widthIn(max = 400.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(18.dp))
                 .background(IskraColors.surface)
-                .border(1.dp, IskraColors.border, RoundedCornerShape(22.dp))
-                .animateContentSize(animationSpec = tween(durationMillis = 280, easing = FastOutSlowInEasing))
-                .padding(horizontal = 24.dp, vertical = 18.dp),
+                .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                .animateContentSize(animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing))
+                .padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
             ) {
-                BrandMark(size = 36.dp)
+                BrandMark(size = 28.dp)
                 Text(
                     text = "IskraAi",
-                    fontSize = 18.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.Black,
                     color = IskraColors.text
                 )
@@ -3567,14 +3604,14 @@ private fun AuthPage(
             AnimatedContent(
                 targetState = mode,
                 transitionSpec = {
-                    (fadeIn(tween(240)) + slideInVertically(tween(240)) { it / 3 })
-                        .togetherWith(fadeOut(tween(160)))
+                    (fadeIn(tween(200)) + slideInVertically(tween(200)) { it / 3 })
+                        .togetherWith(fadeOut(tween(140)))
                 },
                 label = "AuthHeading"
             ) { currentMode ->
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(1.dp)
                 ) {
                     Text(
                         text = when (currentMode) {
@@ -3584,7 +3621,7 @@ private fun AuthPage(
                             "reset" -> "Новый пароль"
                             else -> "С возвращением"
                         },
-                        fontSize = 20.sp,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = IskraColors.text
                     )
@@ -3596,7 +3633,7 @@ private fun AuthPage(
                             "reset" -> "Введите код из письма и новый пароль"
                             else -> "Продолжи свои истории"
                         },
-                        fontSize = 12.sp,
+                        fontSize = 11.sp,
                         color = IskraColors.muted,
                         textAlign = TextAlign.Center
                     )
@@ -3623,9 +3660,9 @@ private fun AuthPage(
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color(0x1FF87171))
                         .border(1.dp, Color(0x4DF87171), RoundedCornerShape(10.dp))
-                        .padding(10.dp)
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
                 ) {
-                    Text(errorMsg!!, color = IskraColors.danger, fontSize = 12.sp)
+                    Text(errorMsg!!, color = IskraColors.danger, fontSize = 11.sp)
                 }
             }
 
@@ -3636,9 +3673,9 @@ private fun AuthPage(
                         .clip(RoundedCornerShape(10.dp))
                         .background(IskraColors.surface2)
                         .border(1.dp, IskraColors.border, RoundedCornerShape(10.dp))
-                        .padding(10.dp)
+                        .padding(horizontal = 10.dp, vertical = 7.dp)
                 ) {
-                    Text(infoMsg!!, color = IskraColors.text, fontSize = 12.sp)
+                    Text(infoMsg!!, color = IskraColors.text, fontSize = 11.sp)
                 }
             }
 
@@ -3648,11 +3685,11 @@ private fun AuthPage(
                     val forward = (initialState == "register" && targetState == "login") ||
                         targetState == "verify" || targetState == "forgot" || targetState == "reset"
                     val dir = if (forward) 1 else -1
-                    (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { fullWidth -> dir * (fullWidth / 5) } +
-                        fadeIn(tween(260)))
+                    (slideInHorizontally(tween(260, easing = FastOutSlowInEasing)) { fullWidth -> dir * (fullWidth / 5) } +
+                        fadeIn(tween(220)))
                         .togetherWith(
-                            slideOutHorizontally(tween(240, easing = FastOutSlowInEasing)) { fullWidth -> -dir * (fullWidth / 5) } +
-                                fadeOut(tween(180))
+                            slideOutHorizontally(tween(200, easing = FastOutSlowInEasing)) { fullWidth -> -dir * (fullWidth / 5) } +
+                                fadeOut(tween(150))
                         )
                 },
                 label = "AuthFormTransition"
@@ -3660,7 +3697,7 @@ private fun AuthPage(
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
                 ) {
                     when (currentMode) {
                         "register" -> {
@@ -3676,41 +3713,48 @@ private fun AuthPage(
                             )
 
                             Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 2.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { acceptTerms = !acceptTerms },
-                                    verticalAlignment = Alignment.CenterVertically
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable { acceptTerms = !acceptTerms }
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Checkbox(
+                                    CompactCheckbox(
                                         checked = acceptTerms,
                                         onCheckedChange = { acceptTerms = it }
                                     )
                                     Text(
-                                        text = "Мне исполнилось 18 лет, и я принимаю условия и политику",
+                                        text = "Мне исполнилось 18 лет, я принимаю условия и политику",
                                         fontSize = 11.sp,
-                                        color = IskraColors.muted
+                                        color = IskraColors.muted,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                 }
                                 Row(
-                                    modifier = Modifier.padding(start = 12.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    modifier = Modifier.padding(start = 25.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
                                         text = "Условия использования",
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = IskraColors.text,
                                         modifier = Modifier.clickable { legalDocToShow = LegalDocType.TERMS }
                                     )
-                                    Text("•", fontSize = 11.sp, color = IskraColors.subtle)
+                                    Text("•", fontSize = 10.sp, color = IskraColors.subtle)
                                     Text(
                                         text = "Политика конфиденциальности",
-                                        fontSize = 11.sp,
+                                        fontSize = 10.sp,
                                         fontWeight = FontWeight.SemiBold,
                                         color = IskraColors.text,
                                         modifier = Modifier.clickable { legalDocToShow = LegalDocType.PRIVACY }
@@ -3747,14 +3791,15 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(42.dp),
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Отправка..." else "Получить код подтверждения", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Отправка..." else "Получить код подтверждения", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
 
@@ -3775,7 +3820,7 @@ private fun AuthPage(
                             ) {
                                 Text(
                                     text = "Забыли пароль?",
-                                    fontSize = 12.sp,
+                                    fontSize = 11.sp,
                                     color = IskraColors.muted,
                                     modifier = Modifier.clickable {
                                         mode = "forgot"
@@ -3804,14 +3849,15 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(42.dp),
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Вход..." else "Войти", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Вход..." else "Войти", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
 
@@ -3843,19 +3889,20 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(42.dp),
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Проверка..." else "Подтвердить и войти", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Проверка..." else "Подтвердить и войти", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
 
                             Text(
                                 text = "Назад",
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 color = IskraColors.muted,
                                 modifier = Modifier.clickable { mode = "register" }
                             )
@@ -3882,18 +3929,19 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(42.dp),
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Отправка..." else "Отправить код", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Отправка..." else "Отправить код", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                             Text(
                                 text = "Вернуться ко входу",
-                                fontSize = 12.sp,
+                                fontSize = 11.sp,
                                 color = IskraColors.muted,
                                 modifier = Modifier.clickable { mode = "login" }
                             )
@@ -3925,14 +3973,15 @@ private fun AuthPage(
                                     }
                                 },
                                 enabled = !busy,
-                                modifier = Modifier.fillMaxWidth().height(42.dp),
-                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth().height(38.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
                                 colors = ButtonDefaults.buttonColors(
                                     containerColor = IskraColors.accent,
                                     contentColor = IskraColors.accentInk
                                 )
                             ) {
-                                Text(if (busy) "Сохранение..." else "Сохранить пароль", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                Text(if (busy) "Сохранение..." else "Сохранить пароль", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -3941,29 +3990,60 @@ private fun AuthPage(
 
             Text(
                 text = "Открыть каталог без входа →",
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 color = IskraColors.subtle,
                 modifier = Modifier.clickable { onContinueGuest() }
             )
 
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Политика конфиденциальности",
-                    fontSize = 10.sp,
-                    color = IskraColors.subtle,
-                    modifier = Modifier.clickable { legalDocToShow = LegalDocType.PRIVACY }
-                )
-                Text("•", fontSize = 10.sp, color = IskraColors.subtle)
-                Text(
-                    text = "Условия (18+)",
-                    fontSize = 10.sp,
-                    color = IskraColors.subtle,
-                    modifier = Modifier.clickable { legalDocToShow = LegalDocType.TERMS }
-                )
+            if (mode != "register") {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Политика конфиденциальности",
+                        fontSize = 10.sp,
+                        color = IskraColors.subtle,
+                        modifier = Modifier.clickable { legalDocToShow = LegalDocType.PRIVACY }
+                    )
+                    Text("•", fontSize = 10.sp, color = IskraColors.subtle)
+                    Text(
+                        text = "Условия (18+)",
+                        fontSize = 10.sp,
+                        color = IskraColors.subtle,
+                        modifier = Modifier.clickable { legalDocToShow = LegalDocType.TERMS }
+                    )
+                }
             }
+        }
+    }
+}
+
+@Composable
+private fun CompactCheckbox(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(17.dp)
+            .clip(RoundedCornerShape(5.dp))
+            .background(if (checked) IskraColors.accent else IskraColors.surface2)
+            .border(
+                1.dp,
+                if (checked) IskraColors.accent else IskraColors.borderStrong,
+                RoundedCornerShape(5.dp)
+            )
+            .clickable { onCheckedChange(!checked) },
+        contentAlignment = Alignment.Center
+    ) {
+        if (checked) {
+            Icon(
+                imageVector = Icons.Default.Check,
+                contentDescription = null,
+                tint = IskraColors.accentInk,
+                modifier = Modifier.size(12.dp)
+            )
         }
     }
 }
@@ -3977,16 +4057,16 @@ private fun AnimatedAuthTabs(
     BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .height(42.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .height(36.dp)
+            .clip(RoundedCornerShape(10.dp))
             .background(IskraColors.surface2)
-            .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
-            .padding(4.dp)
+            .border(1.dp, IskraColors.border, RoundedCornerShape(10.dp))
+            .padding(3.dp)
     ) {
         val pillWidth = (maxWidth - 4.dp) / 2
         val pillOffset by animateDpAsState(
             targetValue = if (isLogin) pillWidth + 4.dp else 0.dp,
-            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
             label = "AuthTabPillOffset"
         )
 
@@ -3995,7 +4075,7 @@ private fun AnimatedAuthTabs(
                 .offset(x = pillOffset)
                 .width(pillWidth)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(IskraColors.text)
         )
 
@@ -4007,20 +4087,20 @@ private fun AnimatedAuthTabs(
                 val active = mode == tabMode
                 val textColor by animateColorAsState(
                     targetValue = if (active) IskraColors.canvas else IskraColors.muted,
-                    animationSpec = tween(durationMillis = 240),
+                    animationSpec = tween(durationMillis = 200),
                     label = "AuthTabTextColor"
                 )
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .clickable { onSelectMode(tabMode) },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = label,
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = textColor
                     )
@@ -4038,27 +4118,59 @@ private fun IskraField(
     placeholder: String,
     minLines: Int = 1
 ) {
+    var focused by remember { mutableStateOf(false) }
+    val singleLine = minLines <= 1
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = IskraColors.muted)
-        OutlinedTextField(
+        if (label.isNotBlank()) {
+            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = IskraColors.muted)
+        }
+        BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text(placeholder, color = IskraColors.subtle, fontSize = 13.sp) },
-            singleLine = minLines == 1,
+            singleLine = singleLine,
             minLines = minLines,
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = IskraColors.surface2,
-                unfocusedContainerColor = IskraColors.surface2,
-                focusedBorderColor = IskraColors.borderStrong,
-                unfocusedBorderColor = IskraColors.border,
-                focusedTextColor = IskraColors.text,
-                unfocusedTextColor = IskraColors.text
+            textStyle = TextStyle(
+                color = IskraColors.text,
+                fontSize = 13.sp,
+                lineHeight = 18.sp
             ),
-            modifier = Modifier.fillMaxWidth()
+            cursorBrush = SolidColor(IskraColors.accent),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focused = it.isFocused },
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (singleLine) Modifier.height(38.dp)
+                            else Modifier.heightIn(min = (minLines * 20 + 16).dp)
+                        )
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(IskraColors.surface2)
+                        .border(
+                            1.dp,
+                            if (focused) IskraColors.borderStrong else IskraColors.border,
+                            RoundedCornerShape(10.dp)
+                        )
+                        .padding(horizontal = 12.dp, vertical = if (singleLine) 0.dp else 9.dp),
+                    contentAlignment = if (singleLine) Alignment.CenterStart else Alignment.TopStart
+                ) {
+                    if (value.isEmpty()) {
+                        Text(
+                            text = placeholder,
+                            color = IskraColors.subtle,
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    innerTextField()
+                }
+            }
         )
     }
 }
@@ -4072,33 +4184,62 @@ private fun IskraPasswordField(
     visible: Boolean,
     onToggleVisible: () -> Unit
 ) {
+    var focused by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = IskraColors.muted)
-        OutlinedTextField(
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = IskraColors.muted)
+        BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text(placeholder, color = IskraColors.subtle, fontSize = 13.sp) },
             singleLine = true,
             visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-            trailingIcon = {
-                AnimatedEyeSlashIcon(
-                    visible = visible,
-                    onClick = onToggleVisible
-                )
-            },
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = IskraColors.surface2,
-                unfocusedContainerColor = IskraColors.surface2,
-                focusedBorderColor = IskraColors.borderStrong,
-                unfocusedBorderColor = IskraColors.border,
-                focusedTextColor = IskraColors.text,
-                unfocusedTextColor = IskraColors.text
+            textStyle = TextStyle(
+                color = IskraColors.text,
+                fontSize = 13.sp,
+                lineHeight = 18.sp
             ),
-            modifier = Modifier.fillMaxWidth()
+            cursorBrush = SolidColor(IskraColors.accent),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { focused = it.isFocused },
+            decorationBox = { innerTextField ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(IskraColors.surface2)
+                        .border(
+                            1.dp,
+                            if (focused) IskraColors.borderStrong else IskraColors.border,
+                            RoundedCornerShape(10.dp)
+                        )
+                        .padding(start = 12.dp, end = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
+                        if (value.isEmpty()) {
+                            Text(
+                                text = placeholder,
+                                color = IskraColors.subtle,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        innerTextField()
+                    }
+                    AnimatedEyeSlashIcon(
+                        visible = visible,
+                        onClick = onToggleVisible
+                    )
+                }
+            }
         )
     }
 }
