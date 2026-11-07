@@ -159,6 +159,34 @@ fun BrandMark(
 }
 
 @Composable
+fun LocalResourceImage(
+    resourceName: String,
+    contentDescription: String? = null,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Fit,
+    fallback: @Composable (() -> Unit)? = null
+) {
+    val bitmap = remember(resourceName) {
+        runCatching {
+            val stream = Thread.currentThread().contextClassLoader.getResourceAsStream(resourceName)
+            stream?.use { bytes ->
+                SkiaImage.makeFromEncoded(bytes.readBytes()).toComposeImageBitmap()
+            }
+        }.getOrNull()
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap,
+            contentDescription = contentDescription,
+            modifier = modifier,
+            contentScale = contentScale
+        )
+    } else if (fallback != null) {
+        fallback()
+    }
+}
+
+@Composable
 fun RemoteImage(
     url: String?,
     api: IskraApiClient,
@@ -2611,7 +2639,7 @@ private fun ProfilePage(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Box(
+                    Row(
                         modifier = Modifier
                             .weight(1f)
                             .height(42.dp)
@@ -2620,23 +2648,43 @@ private fun ProfilePage(
                             .clickable {
                                 runCatching { Desktop.getDesktop().browse(URI("https://t.me/IskraAi_ru")) }
                             },
-                        contentAlignment = Alignment.Center
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Канал Telegram", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        LocalResourceImage(
+                            resourceName = "icon-telegram.png",
+                            contentDescription = "Telegram",
+                            modifier = Modifier.size(20.dp),
+                            fallback = {
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Канал Telegram", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
-                    Box(
+                    Row(
                         modifier = Modifier
                             .weight(1f)
                             .height(42.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF0A0A0A))
-                            .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                            .background(Color.Black)
+                            .border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(12.dp))
                             .clickable {
                                 runCatching { Desktop.getDesktop().browse(URI("https://www.tiktok.com/@iskraai_chat")) }
                             },
-                        contentAlignment = Alignment.Center
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("TikTok", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        LocalResourceImage(
+                            resourceName = "icon-tiktok.png",
+                            contentDescription = "TikTok",
+                            modifier = Modifier.size(19.dp),
+                            fallback = {
+                                Text("♪", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF00F2FE))
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("TikTok", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -3082,7 +3130,14 @@ private fun SettingsModal(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                        LocalResourceImage(
+                            resourceName = "icon-telegram.png",
+                            contentDescription = "Telegram",
+                            modifier = Modifier.size(20.dp),
+                            fallback = {
+                                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                            }
+                        )
                         Spacer(Modifier.width(8.dp))
                         Text("Канал Telegram", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
@@ -3100,7 +3155,14 @@ private fun SettingsModal(
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("♪", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF00F2FE))
+                        LocalResourceImage(
+                            resourceName = "icon-tiktok.png",
+                            contentDescription = "TikTok",
+                            modifier = Modifier.size(19.dp),
+                            fallback = {
+                                Text("♪", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF00F2FE))
+                            }
+                        )
                         Spacer(Modifier.width(8.dp))
                         Text("TikTok", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
