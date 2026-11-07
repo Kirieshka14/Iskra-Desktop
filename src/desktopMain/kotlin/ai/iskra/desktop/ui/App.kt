@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -2669,172 +2670,528 @@ private fun SettingsModal(
     onDismiss: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    var tab by remember { mutableStateOf("appearance") }
-    var name by remember(user) { mutableStateOf(user?.displayName ?: "") }
-    var avatar by remember(user) { mutableStateOf(user?.effectiveAvatarUrl?.ifBlank { api.session?.cachedAvatarUrl } ?: api.session?.cachedAvatarUrl ?: "") }
-    var statusMsg by remember { mutableStateOf<String?>(null) }
+    var selectedPeriod by remember { mutableStateOf("month") }
+    val currentTier = (user?.tier ?: "free").lowercase()
+
+    var showProfileEditor by remember { mutableStateOf(false) }
+    var editName by remember(user) { mutableStateOf(user?.displayName ?: "") }
+    var editAvatar by remember(user) { mutableStateOf(user?.effectiveAvatarUrl?.ifBlank { api.session?.cachedAvatarUrl } ?: api.session?.cachedAvatarUrl ?: "") }
+    var profileSaveMsg by remember { mutableStateOf<String?>(null) }
+    var isSavingProfile by remember { mutableStateOf(false) }
+
+    data class PlanPrice(val label: String, val proPrice: String, val maxPrice: String)
+    val periodPricing = mapOf(
+        "7d" to PlanPrice("7 дней", "199 ₽", "299 ₽"),
+        "month" to PlanPrice("1 месяц", "499 ₽", "699 ₽"),
+        "year" to PlanPrice("1 год", "3 990 ₽", "5 490 ₽")
+    )
+    val pricing = periodPricing[selectedPeriod] ?: periodPricing["month"]!!
 
     val palettes = listOf(
-        Triple("classic", "Классика", Color(0xFFF5F5F4)),
-        Triple("lavender", "Лаванда", Color(0xFFA78BFA)),
-        Triple("terracotta", "Терракота", Color(0xFFEA7A57)),
-        Triple("blue", "Океан", Color(0xFF60A5FA)),
-        Triple("emerald", "Изумруд", Color(0xFF34D399))
+        Triple("classic", "Классика", Pair(Color(0xFFF5F5F4), Color(0xFF1A1A1A))),
+        Triple("lavender", "Лаванда", Pair(Color(0xFFC9B6DF), Color(0xFF7A5FA8))),
+        Triple("terracotta", "Терракота", Pair(Color(0xFFE8A87C), Color(0xFF9D5626))),
+        Triple("blue", "Сапфир", Pair(Color(0xFF8EC7EA), Color(0xFF2B6EA8))),
+        Triple("emerald", "Изумруд", Pair(Color(0xFF6EE7B7), Color(0xFF059669)))
     )
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
-                .width(520.dp)
-                .clip(RoundedCornerShape(22.dp))
+                .width(480.dp)
+                .fillMaxHeight(0.88f)
+                .clip(RoundedCornerShape(24.dp))
                 .background(IskraColors.surface)
-                .border(1.dp, IskraColors.borderStrong, RoundedCornerShape(22.dp))
-                .padding(24.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
+                .border(1.dp, IskraColors.borderStrong, RoundedCornerShape(24.dp))
+                .padding(20.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
+            // Header
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Настройки", fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = IskraColors.text)
-                Text(
-                    text = "✕",
-                    fontSize = 16.sp,
-                    color = IskraColors.muted,
-                    modifier = Modifier.clickable { onDismiss() }.padding(4.dp)
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Palette,
+                        contentDescription = null,
+                        tint = IskraColors.muted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        "Настройки",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = IskraColors.text
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onDismiss() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Закрыть",
+                        tint = IskraColors.muted,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
 
-            Row(
+            // SUBCARD 1: ТАРИФ
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(IskraColors.surface2)
-                    .padding(4.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(IskraColors.surface2.copy(alpha = 0.75f))
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(11.dp)
             ) {
-                listOf("appearance" to "Оформление", "profile" to "Профиль").forEach { (key, label) ->
-                    val active = tab == key
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (active) IskraColors.text else Color.Transparent)
-                            .clickable { tab = key }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = label,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = if (active) IskraColors.canvas else IskraColors.muted
-                        )
+                        Text("Тариф", fontSize = 14.sp, fontWeight = FontWeight.Black, color = IskraColors.text)
+                        UserTierBadge(user?.tier ?: "free")
+                    }
+                    Text(
+                        text = when (currentTier) {
+                            "max" -> "Максимум возможностей"
+                            "pro" -> "Неограниченные диалоги"
+                            else -> "Лимит сообщений, обычная память"
+                        },
+                        fontSize = 11.sp,
+                        color = IskraColors.muted
+                    )
+                }
+
+                // 3 Periods Segment
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(IskraColors.surface2)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf("7d" to "7 дней", "month" to "1 месяц", "year" to "1 год").forEach { (periodKey, label) ->
+                        val isSelected = selectedPeriod == periodKey
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isSelected) IskraColors.accent else Color.Transparent)
+                                .clickable { selectedPeriod = periodKey }
+                                .padding(vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSelected) IskraColors.accentInk else IskraColors.muted
+                            )
+                        }
+                    }
+                }
+
+                // PRO Action Card
+                if (currentTier == "pro") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x2610B981))
+                            .border(1.dp, Color(0x4D10B981), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(15.dp))
+                            Text("ТАРИФ PRO", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFF34D399))
+                        }
+                        Text("Приобретено", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF34D399))
+                    }
+                } else if (currentTier == "max") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(IskraColors.surface2)
+                            .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = IskraColors.muted, modifier = Modifier.size(15.dp))
+                            Text("ВКЛЮЧЕНО В MAX", fontSize = 12.sp, fontWeight = FontWeight.Black, color = IskraColors.muted)
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(IskraColors.accent)
+                            .clickable {
+                                runCatching { Desktop.getDesktop().browse(URI("https://iskraai.run.place/profile")) }
+                            }
+                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Bolt, contentDescription = null, tint = IskraColors.accentInk, modifier = Modifier.size(16.dp))
+                            Text("ОФОРМИТЬ PRO", fontSize = 12.sp, fontWeight = FontWeight.Black, color = IskraColors.accentInk)
+                        }
+                        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(pricing.proPrice, fontSize = 14.sp, fontWeight = FontWeight.Black, color = IskraColors.accentInk)
+                            Text("/ ${pricing.label}", fontSize = 10.sp, color = IskraColors.accentInk.copy(alpha = 0.75f))
+                        }
+                    }
+                }
+
+                // MAX Action Card
+                if (currentTier == "max") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0x33A855F7))
+                            .border(1.dp, Color(0x66A855F7), RoundedCornerShape(12.dp))
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Check, contentDescription = null, tint = Color(0xFFC084FC), modifier = Modifier.size(15.dp))
+                            Text("ТАРИФ MAX", fontSize = 12.sp, fontWeight = FontWeight.Black, color = Color(0xFFC084FC))
+                        }
+                        Text("Приобретено", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC084FC))
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(IskraColors.surface2)
+                            .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                            .clickable {
+                                runCatching { Desktop.getDesktop().browse(URI("https://iskraai.run.place/profile")) }
+                            }
+                            .padding(horizontal = 14.dp, vertical = 11.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = IskraColors.accent, modifier = Modifier.size(16.dp))
+                            Text(
+                                if (currentTier == "pro") "ПЕРЕЙТИ НА MAX" else "ОФОРМИТЬ MAX",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Black,
+                                color = IskraColors.text
+                            )
+                        }
+                        Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(pricing.maxPrice, fontSize = 14.sp, fontWeight = FontWeight.Black, color = IskraColors.text)
+                            Text("/ ${pricing.label}", fontSize = 10.sp, color = IskraColors.muted)
+                        }
                     }
                 }
             }
 
-            if (tab == "appearance") {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("Режим темы", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        FilterChipButton(
-                            label = "Тёмная",
-                            active = isDark,
-                            onClick = { onSaveAppearance(currentPalette, true, wallpapersEnabled) }
-                        )
-                        FilterChipButton(
-                            label = "Светлая",
-                            active = !isDark,
-                            onClick = { onSaveAppearance(currentPalette, false, wallpapersEnabled) }
-                        )
-                    }
+            // SUBCARD 2: ОФОРМЛЕНИЕ
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(IskraColors.surface2.copy(alpha = 0.75f))
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(11.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("ОФОРМЛЕНИЕ", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, color = IskraColors.muted)
+                    Text("Темы и акцентная палитра", fontSize = 11.sp, color = IskraColors.muted)
+                }
 
-                    Text("Цветовая палитра", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = IskraColors.text)
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        palettes.forEach { (id, title, swatch) ->
+                // Mode Segment
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(IskraColors.surface2)
+                        .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    listOf(true to "Тёмная", false to "Светлая").forEach { (darkOption, label) ->
+                        val active = isDark == darkOption
+                        Row(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (active) IskraColors.accent else Color.Transparent)
+                                .clickable { onSaveAppearance(currentPalette, darkOption, wallpapersEnabled) }
+                                .padding(vertical = 7.dp),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                if (darkOption) Icons.Default.DarkMode else Icons.Default.LightMode,
+                                contentDescription = null,
+                                tint = if (active) IskraColors.accentInk else IskraColors.muted,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (active) IskraColors.accentInk else IskraColors.muted
+                            )
+                        }
+                    }
+                }
+
+                // 2-column Grid of 5 Palettes
+                val rowPairs = listOf(
+                    listOf(palettes[0], palettes[1]),
+                    listOf(palettes[2], palettes[3]),
+                    listOf(palettes[4])
+                )
+                rowPairs.forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowItems.forEach { (id, label, colors) ->
                             val active = currentPalette == id
-                            Column(
+                            Row(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(IskraColors.surface2)
                                     .border(
-                                        1.dp,
-                                        if (active) IskraColors.text else IskraColors.border,
+                                        if (active) 1.5.dp else 1.dp,
+                                        if (active) IskraColors.accent else IskraColors.border,
                                         RoundedCornerShape(12.dp)
                                     )
                                     .clickable { onSaveAppearance(id, isDark, wallpapersEnabled) }
-                                    .padding(vertical = 10.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(9.dp)
                             ) {
                                 Box(
                                     modifier = Modifier
                                         .size(20.dp)
                                         .clip(CircleShape)
-                                        .background(swatch)
-                                        .border(1.dp, Color(0x44000000), CircleShape)
+                                        .border(1.dp, IskraColors.borderStrong, CircleShape)
+                                        .background(
+                                            Brush.linearGradient(
+                                                colorStops = arrayOf(
+                                                    0.0f to colors.first,
+                                                    0.5f to colors.first,
+                                                    0.5f to colors.second,
+                                                    1.0f to colors.second
+                                                ),
+                                                start = Offset.Zero,
+                                                end = Offset(40f, 40f)
+                                            )
+                                        )
                                 )
-                                Text(title, fontSize = 11.sp, color = if (active) IskraColors.text else IskraColors.muted)
+                                Text(
+                                    text = label,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (active) IskraColors.text else IskraColors.muted
+                                )
                             }
                         }
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        CompactCheckbox(
-                            checked = wallpapersEnabled,
-                            onCheckedChange = { onSaveAppearance(currentPalette, isDark, it) }
-                        )
-                        Text("Атмосферный фон в чате", fontSize = 13.sp, color = IskraColors.text)
+                        if (rowItems.size == 1) {
+                            Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    IskraField(value = name, onValueChange = { name = it }, label = "Отображаемое имя", placeholder = "Ваше имя")
-                    IskraField(value = avatar, onValueChange = { avatar = it }, label = "URL аватара", placeholder = "https://...")
 
-                    if (statusMsg != null) {
-                        Text(statusMsg!!, fontSize = 12.sp, color = IskraColors.muted)
+                HorizontalDivider(color = IskraColors.border)
+
+                // Wallpapers toggle
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Авторские обои в чате", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = IskraColors.text)
+                        Text("Показывать фон от создателя персонажа", fontSize = 11.sp, color = IskraColors.muted)
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (wallpapersEnabled) IskraColors.accent else IskraColors.surface2)
+                            .border(1.dp, if (wallpapersEnabled) Color.Transparent else IskraColors.border, RoundedCornerShape(8.dp))
+                            .clickable { onSaveAppearance(currentPalette, isDark, !wallpapersEnabled) }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (wallpapersEnabled) "Включены" else "Выключены",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (wallpapersEnabled) IskraColors.accentInk else IskraColors.muted
+                        )
+                    }
+                }
+            }
+
+            // SUBCARD 3: СОЦИАЛЬНЫЕ СЕТИ
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(IskraColors.surface2.copy(alpha = 0.75f))
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Text("СОЦИАЛЬНЫЕ СЕТИ", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.8.sp, color = IskraColors.muted)
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFF229ED9))
+                            .clickable {
+                                runCatching { Desktop.getDesktop().browse(URI("https://t.me/IskraAi_ru")) }
+                            },
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.Send, contentDescription = null, tint = Color.White, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Канал Telegram", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
 
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(42.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.Black)
+                            .border(1.dp, Color(0xFF2A2A2A), RoundedCornerShape(12.dp))
+                            .clickable {
+                                runCatching { Desktop.getDesktop().browse(URI("https://www.tiktok.com/@iskraai_chat")) }
+                            },
+                        horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Text("♪", fontSize = 14.sp, fontWeight = FontWeight.Black, color = Color(0xFF00F2FE))
+                        Spacer(Modifier.width(8.dp))
+                        Text("TikTok", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+
+            // OPTIONAL PROFILE QUICK-EDIT
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(IskraColors.surface2.copy(alpha = 0.75f))
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(18.dp))
+                    .padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showProfileEditor = !showProfileEditor },
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = IskraColors.muted, modifier = Modifier.size(16.dp))
+                        Text("Профиль и аватар", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = IskraColors.text)
+                    }
+                    Text(
+                        text = if (showProfileEditor) "Свернуть" else "Изменить",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = IskraColors.accent
+                    )
+                }
+
+                if (showProfileEditor) {
+                    Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                        IskraField(value = editName, onValueChange = { editName = it }, label = "Отображаемое имя", placeholder = "Ваше имя")
+                        IskraField(value = editAvatar, onValueChange = { editAvatar = it }, label = "URL аватара", placeholder = "https://...")
+
+                        if (profileSaveMsg != null) {
+                            Text(profileSaveMsg!!, fontSize = 11.sp, color = IskraColors.muted)
+                        }
+
                         Button(
                             onClick = {
+                                if (isSavingProfile) return@Button
+                                isSavingProfile = true
                                 scope.launch {
                                     runCatching {
                                         api.updateProfile(
-                                            displayName = name.trim().ifBlank { null },
-                                            avatarUrl = avatar.trim().ifBlank { null }
+                                            displayName = editName.trim().ifBlank { null },
+                                            avatarUrl = editAvatar.trim().ifBlank { null }
                                         )
                                         onUserUpdated()
-                                        statusMsg = "Профиль обновлён"
+                                        profileSaveMsg = "Профиль обновлён"
                                     }.onFailure { e ->
-                                        statusMsg = e.message ?: "Ошибка сохранения"
+                                        profileSaveMsg = e.message ?: "Ошибка сохранения"
                                     }
+                                    isSavingProfile = false
                                 }
                             },
                             shape = RoundedCornerShape(999.dp),
+                            modifier = Modifier.height(34.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = IskraColors.accent,
                                 contentColor = IskraColors.accentInk
                             )
                         ) {
-                            Text("Сохранить", fontSize = 13.sp)
-                        }
-
-                        TextButton(onClick = onLogout) {
-                            Text("Выйти из аккаунта", color = IskraColors.danger, fontSize = 13.sp)
+                            Text(if (isSavingProfile) "Сохраняем..." else "Сохранить профиль", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
+            }
+
+            // LOGOUT BUTTON
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(IskraColors.surface2)
+                    .border(1.dp, IskraColors.border, RoundedCornerShape(12.dp))
+                    .clickable { onLogout() },
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null, tint = IskraColors.muted, modifier = Modifier.size(15.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Выйти из аккаунта", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = IskraColors.text)
             }
         }
     }
